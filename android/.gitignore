@@ -1,0 +1,50 @@
+# Flutter/Dart/Pub related
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+flutter_*.png
+
+# Android/Gradle
+.gradle/
+gradle-wrapper.jar
+/captures/
+local.properties
+**/*.iml
+**/*.apk
+**/*.aar
+**/*.ap_
+**/*.jks
+**/*.keystore
+
+# iOS
+Pods/
+DerivedData/
+*.xcworkspace
+*.xcuserdata
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+Flutter/Flutter.framework
+Flutter/Flutter.podspec
+GeneratedPluginRegistrant.*
+
+# VSCode
+.vscode/
+
+# IntelliJ/Android Studio
+.idea/
+*.iml
+
+# Misc
+*.log
+*.tmp
+*.swp
+
+# Key files (never commit)
+key.properties
+*.jks
+*.keystore
+
+# Others
+.cxx/
