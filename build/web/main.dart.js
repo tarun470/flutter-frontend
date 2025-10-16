@@ -79993,46 +79993,47 @@ A.amo.prototype={
 $1(a){return B.fM},
 $S:98}
 A.ae0.prototype={
-QW(a,a0,a1,a2){var s,r,q,p,o,n,m,l,k,j,i,h,g,f=this,e="http://localhost:5000",d=null,c="query",b=f.a
-if(b!=null&&b.w){A.cI("\u26a0\ufe0f Socket already connected")
-return}A.cI("\ud83d\udd0c Connecting to Socket.IO...")
-b=t.N
+QW(a,b,a0,a1){var s,r,q,p,o,n,m,l,k,j,i,h,g,f="https://chat-backend.onrender.com",e=null,d="query",c=this.a
+if(c!=null&&c.w){A.cI("\u26a0\ufe0f Socket already connected")
+return}A.cI("\ud83d\udd0c Connecting to Socket.IO at https://chat-backend.onrender.com...")
+c=t.N
 s=t.z
-r=A.r(b,s)
+r=A.r(c,s)
 r.m(0,"transports",A.b(["websocket"],t.s))
 r.E(0,"autoConnect")
-r.m(0,c,A.X(["token",a],s,s))
-q=A.eL(e)
+r.m(0,d,A.X(["token",a],s,s))
+q=A.eL(f)
 p=q.gef()+"://"+q.gjF(q)+":"+q.gnm(q)
 o=q.gdG(q)
 n=$.aqh.ad(0,p)&&$.aqh.h(0,p).d.ad(0,o)
 m=J.d(r.h(0,"forceNew"),!0)||J.d(r.h(0,"force new connection"),!0)||!1===r.h(0,"multiplex")||n
 l=A.bw("io")
-if(m){$.aDP().au(B.m,"ignoring socket cache for http://localhost:5000",d,d)
-l.b=A.ax3(r,e)}else{k=$.aqh.h(0,p)
-if(k==null){k=A.ax3(r,e)
-$.aqh.m(0,p,k)}l.b=k}if(q.gkM(q).length!==0&&r.h(0,c)==null)r.m(0,c,q.gkM(q))
-else if(t.f.b(r.h(0,c)))r.m(0,c,A.aPl(r.h(0,c)))
+if(m){$.aDP().au(B.m,"ignoring socket cache for https://chat-backend.onrender.com",e,e)
+l.b=A.ax3(r,f)}else{k=$.aqh.h(0,p)
+if(k==null){k=A.ax3(r,f)
+$.aqh.m(0,p,k)}l.b=k}if(q.gkM(q).length!==0&&r.h(0,d)==null)r.m(0,d,q.gkM(q))
+else if(t.f.b(r.h(0,d)))r.m(0,d,A.aPl(r.h(0,d)))
 k=l.aL()
 j=q.gdG(q).length===0?"/":q.gdG(q)
 i=k.d
 h=i.h(0,j)
 if(h==null){g=t.sB
-h=new A.An(k,[],[],[],j,r,A.r(s,s),A.r(s,s),[],[],A.cx(d,d,d,b,g),A.cx(d,d,d,b,g),A.b([],t.hx))
-r.h(0,c)
+h=new A.An(k,[],[],[],j,r,A.r(s,s),A.r(s,s),[],[],A.cx(e,e,e,c,g),A.cx(e,e,e,c,g),A.b([],t.hx))
+r.h(0,d)
 h.y=r.h(0,"auth")
-b=k.db
-b===$&&A.a()
-if(b)h.QV()
-i.m(0,j,h)}else{b=k.db
-b===$&&A.a()
-if(b&&h.cx==null)h.QV()}f.a=h
-h.eE(0,"connect",new A.ae1(f,a0))
-f.a.eE(0,"disconnect",new A.ae2(a1))
-f.a.d.eE(0,"error",new A.ae3(a2))
-f.a.eE(0,"connect_error",new A.ae4(a2))
-f.a.d.eE(0,"reconnect",new A.ae5())
-f.a.d.eE(0,"reconnect_attempt",new A.ae6())},
+c=k.db
+c===$&&A.a()
+if(c)h.QV()
+i.m(0,j,h)}else{c=k.db
+c===$&&A.a()
+if(c&&h.cx==null)h.QV()}this.a=h
+h.eE(0,"connect",new A.ae1(this,b))
+h.eE(0,"disconnect",new A.ae2(a0))
+c=h.d
+c.eE(0,"error",new A.ae3(a1))
+h.eE(0,"connect_error",new A.ae4(a1))
+c.eE(0,"reconnect",new A.ae5())
+c.eE(0,"reconnect_attempt",new A.ae6())},
 aeW(a){return this.QW(a,null,null,null)},
 ajg(a){var s="receiveMessage",r=this.a
 if(r!=null)r.Ga(s)
