@@ -1,6 +1,35 @@
-# Miscellaneous
-*.class
+# -------------------------------
+# Flutter / Dart / Pub
+# -------------------------------
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+**/doc/api/
+**/ios/Flutter/.last_build_id
+
+# -------------------------------
+# Flutter / Build
+# -------------------------------
+/build/           # ignore all build folders
+!build/web/       # except web build for deployment
+
+# -------------------------------
+# Windows / VS Code / IDE
+# -------------------------------
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/          # uncomment if you want to track VS Code configs
 *.log
+*.class
 *.pyc
 *.swp
 .DS_Store
@@ -12,34 +41,40 @@
 .swiftpm/
 migrate_working_dir/
 
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
-.idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
+# -------------------------------
+# Android / Gradle
+# -------------------------------
 /android/app/debug
 /android/app/profile
 /android/app/release
+*.apk
+*.ap_
+*.aab
+.gradle/
+/captures/
+/output.json
+
+# -------------------------------
+# iOS
+# -------------------------------
+/ios/Pods/
+/ios/.symlinks/
+/ios/Flutter/Flutter.podspec
+/ios/Runner.xcworkspace/
+/ios/Runner/GeneratedPluginRegistrant.*
+
+# -------------------------------
+# MacOS / Linux
+# -------------------------------
+/macos/Flutter/Flutter.podspec
+/macos/Flutter/GeneratedPluginRegistrant.*
+/linux/flutter/generated_plugin_registrant.cc
+
+# -------------------------------
+# Miscellaneous
+# -------------------------------
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
