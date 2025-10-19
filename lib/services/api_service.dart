@@ -14,7 +14,10 @@ class ApiService {
     try {
       final res = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
         body: jsonEncode({'username': username, 'password': password}),
       );
 
@@ -25,7 +28,7 @@ class ApiService {
         final data = jsonDecode(res.body);
         final token = data['token'] as String?;
         final user = data['user'];
-        final userId = user?['id'] as String?; // use 'id' from backend
+        final userId = user?['id'] ?? user?['_id'];
 
         if (token != null && userId != null) {
           // Save token & userId securely
@@ -58,7 +61,10 @@ class ApiService {
     try {
       final res = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
         body: jsonEncode({'username': username, 'password': password}),
       );
 
@@ -68,9 +74,8 @@ class ApiService {
       if (res.statusCode == 201) {
         final data = jsonDecode(res.body);
         final user = data['user'];
-        final userId = user?['_id'] as String? ?? user?['id'] as String?;
+        final userId = user?['_id'] ?? user?['id'];
 
-        // Backend usually does not return token on register
         return {
           'userId': userId,
           'username': user?['username'] ?? '',
