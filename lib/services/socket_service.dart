@@ -13,7 +13,7 @@ class SocketService {
   /// Connect to Socket.IO server with JWT
   void connect(
     String token, {
-    String url = 'https://chat-backend.onrender.com', // ✅ deployed backend
+    String url = 'https://chat-backend-mnz7.onrender.com', // ✅ Correct deployed backend
     void Function()? onConnect,
     void Function()? onDisconnect,
     void Function(dynamic)? onError,
@@ -30,11 +30,12 @@ class SocketService {
       IO.OptionBuilder()
           .setTransports(['websocket'])
           .enableAutoConnect()
-          .setQuery({'token': token})
+          // ✅ Use auth instead of query for better security and socket.io v4+ compatibility
+          .setAuth({'token': token})
           .build(),
     );
 
-    // --- Events ---
+    // --- Socket events ---
     _socket!
       ..onConnect((_) {
         print('✅ Socket connected: ${_socket!.id}');
@@ -56,9 +57,9 @@ class SocketService {
       ..onReconnectAttempt((_) => print('⏳ Socket reconnecting...'));
   }
 
-  /// Listen for incoming messages
+  /// Listen for messages from server
   void listenMessage(MessageCallback callback) {
-    _socket?.off('receiveMessage'); // remove old listener
+    _socket?.off('receiveMessage'); // Remove old listeners to avoid duplicates
     _socket?.on('receiveMessage', (data) {
       try {
         final message = data is String
@@ -84,7 +85,7 @@ class SocketService {
     _socket!.emit('sendMessage', message);
   }
 
-  /// Disconnect cleanly
+  /// Disconnect socket cleanly
   Future<void> disconnect() async {
     if (_socket != null) {
       print('🔌 Disconnecting socket...');
