@@ -12,11 +12,27 @@ class Message {
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
+    // handle both `senderId` and nested `sender._id`
+    final senderField = json['senderId'] ??
+        (json['sender'] is Map ? json['sender']['_id'] : json['sender']) ??
+        '';
+
+    // handle both timestamp and createdAt fields
+    final timestampStr =
+        json['timestamp'] ?? json['createdAt'] ?? DateTime.now().toIso8601String();
+
     return Message(
-      id: json['_id'],
-      senderId: json['sender']['_id'] ?? json['sender'],
-      content: json['content'],
-      timestamp: DateTime.parse(json['timestamp']),
+      id: json['_id'] ?? json['id'] ?? '',
+      senderId: senderField,
+      content: json['content'] ?? '',
+      timestamp: DateTime.tryParse(timestampStr) ?? DateTime.now(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        '_id': id,
+        'senderId': senderId,
+        'content': content,
+        'timestamp': timestamp.toIso8601String(),
+      };
 }

@@ -1,8 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import '../models/message.dart';
 
-typedef MessageCallback = void Function(Map<String, dynamic> data);
+typedef MessageCallback = void Function(Message message);
 
 class SocketService {
   static final SocketService _instance = SocketService._internal();
@@ -10,6 +10,7 @@ class SocketService {
   SocketService._internal();
 
   IO.Socket? _socket;
+  MessageCallback? _onMessageCallback;
 
   void connect(
     String token, {
@@ -24,70 +25,74 @@ class SocketService {
       url,
       IO.OptionBuilder()
           .setTransports(['websocket'])
+          .enableForceNew()
           .enableAutoConnect()
           .setAuth({'token': token})
           .build(),
     );
 
     _socket!
-      ..onConnect((_) => onConnect?.call())
-      ..onDisconnect((_) => onDisconnect?.call())
-      ..onError((data) => onError?.call(data))
-      ..onConnectError((data) => onError?.call(data))
-      ..onReconnect((_) => print('🔄 Socket reconnected'))
-      ..onReconnectAttempt((_) => print('⏳ Socket reconnecting...'));
+      ..onConnect((_) {
+        print('✅ Socket connected: ${_socket!.id}');
+        onConnect?.call();
+        if (_onMessageCallback != null) _listenMessageInternal(_onMessageCallback!);
+      })
+      ..onDisconnect((_) {
+        print('❌ Socket disconnected');
+        onDisconnect?.call();
+      })
+      ..onError((data) {
+        print('⚠️ Socket error: $data');
+        onError?.call(data);
+      })
+      ..onConnectError((data) {
+        print('⚠️ Connection error: $data');
+        onError?.call(data);
+      });
   }
 
   void listenMessage(MessageCallback callback) {
-    _socket?.off('receiveMessage');
-    _socket?.on('receiveMessage', (data) {
-      final msg = data is String
-          ? jsonDecode(data)
-          : Map<String, dynamic>.from(data);
-      callback(msg);
+    _onMessageCallback = callback;
+    if (_socket != null && _socket!.connected) _listenMessageInternal(callback);
+  }
+
+  void _listenMessageInternal(MessageCallback callback) {
+    _socket!.off('receiveMessage');
+    _socket!.on('receiveMessage', (data) {
+      try {
+        final map = data is String ? jsonDecode(data) : Map<String, dynamic>.from(data);
+        final msg = Message.fromJson(map);
+        callback(msg);
+      } catch (e) {
+        print('⚠️ Message parse error: $e');
+      }
     });
   }
 
-  /// Send message and wait for server confirmation
-  Future<Map<String, dynamic>?> sendMessage(String content) async {
-    if (_socket == null || !_socket!.connected) return null;
-
-    final completer = Completer<Map<String, dynamic>>();
-
-    void handler(dynamic data) {
-      try {
-        final msg = data is String
-            ? jsonDecode(data)
-            : Map<String, dynamic>.from(data);
-
-        // Only complete if content matches
-        if (msg['content'] == content) {
-          completer.complete(msg);
-        }
-      } catch (e) {
-        completer.completeError(e);
-      }
+  void sendMessage(String content) {
+    if (_socket == null || !_socket!.connected) {
+      print('⚠️ Socket not connected');
+      return;
     }
+    if (content.trim().isEmpty) return;
 
-    _socket!.on('receiveMessage', handler);
-    _socket!.emit('sendMessage', {'content': content});
-
-    final result = await completer.future;
-
-    // Remove temporary listener to avoid duplicates
-    _socket!.off('receiveMessage', handler);
-
-    return result;
+    _socket!.emit('sendMessage', {'content': content.trim()});
   }
 
-  Future<void> disconnect() async {
+  void disconnect() {
     if (_socket != null) {
       _socket!.off('receiveMessage');
       _socket!.disconnect();
       _socket!.dispose();
       _socket = null;
+      _onMessageCallback = null;
+      print('🔌 Socket disconnected & disposed');
     }
   }
 
   bool get isConnected => _socket?.connected ?? false;
 }
+
+
+
+

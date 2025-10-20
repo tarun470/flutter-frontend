@@ -28,11 +28,9 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 6),
-    )..repeat(reverse: true);
-
+    _animationController =
+        AnimationController(vsync: this, duration: const Duration(seconds: 6))
+          ..repeat(reverse: true);
     _initializeUser();
   }
 
@@ -50,17 +48,13 @@ class _ChatScreenState extends State<ChatScreen>
   void _connectSocket() {
     socketService.connect(
       token!,
-      onConnect: () => debugPrint('✅ Socket connected'),
-      onDisconnect: () => debugPrint('❌ Socket disconnected'),
-      onError: (err) => debugPrint('⚠️ Socket error: $err'),
+      onConnect: () => print('✅ Socket connected'),
+      onDisconnect: () => print('❌ Socket disconnected'),
     );
 
-    socketService.listenMessage((data) {
-      final newMessage = Message.fromJson(data);
-
-      // ✅ Avoid duplicates
-      if (!messages.any((msg) => msg.id == newMessage.id)) {
-        setState(() => messages.add(newMessage));
+    socketService.listenMessage((msg) {
+      if (!messages.any((m) => m.id == msg.id)) {
+        setState(() => messages.add(msg));
         _scrollToBottom();
       }
     });
@@ -82,13 +76,22 @@ class _ChatScreenState extends State<ChatScreen>
     final content = messageController.text.trim();
     if (content.isEmpty) return;
 
-    // ✅ Do not add locally; server will broadcast with correct timestamp
+    // Add locally for instant UI update
+    final tempMsg = Message(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      senderId: userId ?? '',
+      content: content,
+      timestamp: DateTime.now(),
+    );
+    setState(() => messages.add(tempMsg));
+    _scrollToBottom();
+
     socketService.sendMessage(content);
     messageController.clear();
   }
 
   Future<void> logout() async {
-    await socketService.disconnect();
+    socketService.disconnect(); // ✅ removed 'await' since it's void
     await secureStorage.clearAll();
     _redirectToLogin();
   }
@@ -98,6 +101,15 @@ class _ChatScreenState extends State<ChatScreen>
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
     );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    scrollController.dispose();
+    messageController.dispose();
+    socketService.disconnect(); // also no 'await'
+    super.dispose();
   }
 
   Widget buildMessageBubble(Message message, bool isMe) {
@@ -118,20 +130,10 @@ class _ChatScreenState extends State<ChatScreen>
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
-            bottomLeft: isMe ? const Radius.circular(18) : const Radius.circular(4),
-            bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(18),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.blueAccent.withOpacity(0.4),
-              blurRadius: 12,
-              spreadRadius: 1,
-              offset: const Offset(2, 3),
-            ),
-          ],
-          border: Border.all(
-            color: Colors.blueAccent.withOpacity(0.4),
-            width: 0.8,
+            bottomLeft:
+                isMe ? const Radius.circular(18) : const Radius.circular(4),
+            bottomRight:
+                isMe ? const Radius.circular(4) : const Radius.circular(18),
           ),
         ),
         child: Column(
@@ -160,15 +162,6 @@ class _ChatScreenState extends State<ChatScreen>
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.85),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.cyanAccent.withOpacity(0.5), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.cyanAccent.withOpacity(0.4),
-            blurRadius: 20,
-            spreadRadius: 2,
-            offset: const Offset(0, 5),
-          ),
-        ],
       ),
       child: Row(
         children: [
@@ -176,24 +169,17 @@ class _ChatScreenState extends State<ChatScreen>
             child: TextField(
               controller: messageController,
               style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Send a friendly message...',
-                hintStyle: const TextStyle(color: Colors.white38),
-                filled: true,
-                fillColor: Colors.black,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide.none,
-                ),
+              decoration: const InputDecoration(
+                hintText: 'Send a message...',
+                hintStyle: TextStyle(color: Colors.white38),
+                border: InputBorder.none,
               ),
               onSubmitted: (_) => sendMessage(),
             ),
           ),
-          const SizedBox(width: 8),
           IconButton(
             onPressed: sendMessage,
-            icon: const Icon(Icons.send, color: Colors.cyanAccent, size: 26),
+            icon: const Icon(Icons.send, color: Colors.cyanAccent),
           ),
           IconButton(
             onPressed: logout,
@@ -204,134 +190,28 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  Widget _buildPulsingHandshake(double width, double height) {
-    return AnimatedBuilder(
-      animation: _animationController,
-      builder: (context, _) {
-        final scale = 0.9 + 0.1 * _animationController.value;
-        final opacity = 0.05 + 0.05 * _animationController.value;
-        return Opacity(
-          opacity: opacity,
-          child: Transform.scale(
-            scale: scale,
-            child: Image.network(
-              'https://cdn-icons-png.flaticon.com/512/616/616408.png',
-              width: width,
-              height: height,
-              fit: BoxFit.cover,
-              color: Colors.cyanAccent.withOpacity(0.15),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          Positioned.fill(child: _buildPulsingHandshake(screenWidth, screenHeight)),
-          SafeArea(
-            child: Center(
-              child: Column(
-                children: [
-                  // HEADER
-                  Container(
-                    width: screenWidth * 0.5,
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF0D47A1), Color(0xFF1976D2)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.cyanAccent.withOpacity(0.6),
-                          blurRadius: 25,
-                          spreadRadius: 2,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Text(
-                        '🤝 CHAT ROOM 🤝',
-                        style: TextStyle(
-                          fontSize: 28,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.4,
-                          shadows: [
-                            Shadow(
-                                blurRadius: 10,
-                                color: Colors.cyanAccent,
-                                offset: Offset(0, 0))
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // CHAT CONTAINER
-                  Expanded(
-                    child: Center(
-                      child: Container(
-                        width: screenWidth * 0.5,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF001F3F), Color(0xFF0A192F)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: Colors.cyanAccent.withOpacity(0.4),
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.cyanAccent.withOpacity(0.3),
-                              blurRadius: 30,
-                              spreadRadius: 2,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: ListView.builder(
-                                controller: scrollController,
-                                itemCount: messages.length,
-                                itemBuilder: (context, index) {
-                                  final message = messages[index];
-                                  final isMe = message.senderId == userId;
-                                  return buildMessageBubble(message, isMe);
-                                },
-                              ),
-                            ),
-                            buildInputArea(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                itemCount: messages.length,
+                itemBuilder: (context, index) {
+                  final message = messages[index];
+                  final isMe = message.senderId == (userId ?? '');
+                  return buildMessageBubble(message, isMe);
+                },
               ),
             ),
-          ),
-        ],
+            buildInputArea(),
+          ],
+        ),
       ),
     );
   }
 }
-
