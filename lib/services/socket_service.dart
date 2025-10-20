@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
@@ -10,93 +11,83 @@ class SocketService {
 
   IO.Socket? _socket;
 
-  /// Connect to Socket.IO server with JWT
   void connect(
     String token, {
-    String url = 'https://chat-backend-mnz7.onrender.com', // ✅ Correct deployed backend
+    String url = 'https://chat-backend-mnz7.onrender.com',
     void Function()? onConnect,
     void Function()? onDisconnect,
     void Function(dynamic)? onError,
   }) {
-    if (_socket != null && _socket!.connected) {
-      print('⚠️ Socket already connected');
-      return;
-    }
-
-    print('🔌 Connecting to Socket.IO at $url...');
+    if (_socket != null && _socket!.connected) return;
 
     _socket = IO.io(
       url,
       IO.OptionBuilder()
           .setTransports(['websocket'])
           .enableAutoConnect()
-          // ✅ Use auth instead of query for better security and socket.io v4+ compatibility
           .setAuth({'token': token})
           .build(),
     );
 
-    // --- Socket events ---
     _socket!
-      ..onConnect((_) {
-        print('✅ Socket connected: ${_socket!.id}');
-        onConnect?.call();
-      })
-      ..onDisconnect((_) {
-        print('❌ Socket disconnected');
-        onDisconnect?.call();
-      })
-      ..onError((data) {
-        print('⚠️ Socket error: $data');
-        onError?.call(data);
-      })
-      ..onConnectError((data) {
-        print('⚠️ Socket connection error: $data');
-        onError?.call(data);
-      })
+      ..onConnect((_) => onConnect?.call())
+      ..onDisconnect((_) => onDisconnect?.call())
+      ..onError((data) => onError?.call(data))
+      ..onConnectError((data) => onError?.call(data))
       ..onReconnect((_) => print('🔄 Socket reconnected'))
       ..onReconnectAttempt((_) => print('⏳ Socket reconnecting...'));
   }
 
-  /// Listen for messages from server
   void listenMessage(MessageCallback callback) {
-    _socket?.off('receiveMessage'); // Remove old listeners to avoid duplicates
+    _socket?.off('receiveMessage');
     _socket?.on('receiveMessage', (data) {
-      try {
-        final message = data is String
-            ? jsonDecode(data)
-            : Map<String, dynamic>.from(data);
-        print('📩 Message received: $message');
-        callback(message);
-      } catch (e) {
-        print('⚠️ Message parse error: $e');
-      }
+      final msg = data is String
+          ? jsonDecode(data)
+          : Map<String, dynamic>.from(data);
+      callback(msg);
     });
   }
 
-  /// Send message to server
-  void sendMessage(String content) {
-    if (_socket == null || !_socket!.connected) {
-      print('⚠️ Cannot send — socket not connected');
-      return;
+  /// Send message and wait for server confirmation
+  Future<Map<String, dynamic>?> sendMessage(String content) async {
+    if (_socket == null || !_socket!.connected) return null;
+
+    final completer = Completer<Map<String, dynamic>>();
+
+    void handler(dynamic data) {
+      try {
+        final msg = data is String
+            ? jsonDecode(data)
+            : Map<String, dynamic>.from(data);
+
+        // Only complete if content matches
+        if (msg['content'] == content) {
+          completer.complete(msg);
+        }
+      } catch (e) {
+        completer.completeError(e);
+      }
     }
 
-    final message = {'content': content};
-    print('📤 Sending message: $message');
-    _socket!.emit('sendMessage', message);
+    _socket!.on('receiveMessage', handler);
+    _socket!.emit('sendMessage', {'content': content});
+
+    final result = await completer.future;
+
+    // Remove temporary listener to avoid duplicates
+    _socket!.off('receiveMessage', handler);
+
+    return result;
   }
 
-  /// Disconnect socket cleanly
   Future<void> disconnect() async {
     if (_socket != null) {
-      print('🔌 Disconnecting socket...');
       _socket!.off('receiveMessage');
       _socket!.disconnect();
       _socket!.dispose();
       _socket = null;
-      print('❌ Socket fully disconnected');
     }
   }
 
-  /// Check connection status
   bool get isConnected => _socket?.connected ?? false;
 }

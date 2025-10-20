@@ -28,11 +28,12 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void initState() {
     super.initState();
-    _initializeUser();
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 6),
     )..repeat(reverse: true);
+
+    _initializeUser();
   }
 
   Future<void> _initializeUser() async {
@@ -56,8 +57,12 @@ class _ChatScreenState extends State<ChatScreen>
 
     socketService.listenMessage((data) {
       final newMessage = Message.fromJson(data);
-      setState(() => messages.add(newMessage));
-      _scrollToBottom();
+
+      // ✅ Avoid duplicates
+      if (!messages.any((msg) => msg.id == newMessage.id)) {
+        setState(() => messages.add(newMessage));
+        _scrollToBottom();
+      }
     });
   }
 
@@ -77,17 +82,9 @@ class _ChatScreenState extends State<ChatScreen>
     final content = messageController.text.trim();
     if (content.isEmpty) return;
 
-    final msg = Message(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      senderId: userId ?? "unknown",
-      content: content,
-      timestamp: DateTime.now(),
-    );
-
-    setState(() => messages.add(msg));
+    // ✅ Do not add locally; server will broadcast with correct timestamp
     socketService.sendMessage(content);
     messageController.clear();
-    _scrollToBottom();
   }
 
   Future<void> logout() async {
@@ -107,16 +104,13 @@ class _ChatScreenState extends State<ChatScreen>
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
+        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         constraints: const BoxConstraints(maxWidth: 400),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: isMe
-                ? [
-                    Colors.cyanAccent.withOpacity(0.3),
-                    Colors.blueAccent.withOpacity(0.8)
-                  ]
+                ? [Colors.cyanAccent.withOpacity(0.3), Colors.blueAccent]
                 : [Colors.indigo.shade700, Colors.blueGrey.shade800],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -124,10 +118,8 @@ class _ChatScreenState extends State<ChatScreen>
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
-            bottomLeft:
-                isMe ? const Radius.circular(18) : const Radius.circular(4),
-            bottomRight:
-                isMe ? const Radius.circular(4) : const Radius.circular(18),
+            bottomLeft: isMe ? const Radius.circular(18) : const Radius.circular(4),
+            bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(18),
           ),
           boxShadow: [
             BoxShadow(
@@ -189,8 +181,7 @@ class _ChatScreenState extends State<ChatScreen>
                 hintStyle: const TextStyle(color: Colors.white38),
                 filled: true,
                 fillColor: Colors.black,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
                   borderSide: BorderSide.none,
@@ -260,8 +251,7 @@ class _ChatScreenState extends State<ChatScreen>
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius:
-                          const BorderRadius.vertical(top: Radius.circular(25)),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.cyanAccent.withOpacity(0.6),
@@ -344,3 +334,4 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 }
+
