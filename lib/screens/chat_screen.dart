@@ -12,8 +12,7 @@ class ChatScreen extends StatefulWidget {
   _ChatScreenState createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen>
-    with SingleTickerProviderStateMixin {
+class _ChatScreenState extends State<ChatScreen> {
   final socketService = SocketService();
   final messageController = TextEditingController();
   final secureStorage = SecureStorageService();
@@ -23,51 +22,43 @@ class _ChatScreenState extends State<ChatScreen>
   String? token;
   String? userId;
 
-  late AnimationController _animationController;
-
   @override
   void initState() {
     super.initState();
-    _animationController =
-        AnimationController(vsync: this, duration: const Duration(seconds: 6))
-          ..repeat(reverse: true);
     _initializeUser();
   }
 
   Future<void> _initializeUser() async {
     token = await secureStorage.getToken();
     userId = await secureStorage.getUserId();
-
-    if (token != null && userId != null) {
-      _connectSocket();
-    } else {
-      _redirectToLogin();
-    }
+    if (token != null && userId != null) _connectSocket();
+    else _redirectToLogin();
   }
 
   void _connectSocket() {
-    socketService.connect(
-      token!,
-      onConnect: () => print('✅ Socket connected'),
-      onDisconnect: () => print('❌ Socket disconnected'),
-    );
+    socketService.connect(token!,
+        onConnect: () => print('✅ Socket connected'),
+        onDisconnect: () => print('❌ Socket disconnected'));
 
     socketService.listenMessage((msg) {
-      if (!messages.any((m) => m.id == msg.id)) {
-        setState(() => messages.add(msg));
-        _scrollToBottom();
-      }
+      setState(() {
+        // Replace temp message if content & sender match
+        final index = messages.indexWhere((m) =>
+            m.senderId == msg.senderId &&
+            m.content == msg.content &&
+            m.timestamp.difference(msg.timestamp).inSeconds.abs() < 5);
+        if (index != -1) messages[index] = msg;
+        else if (!messages.any((m) => m.id == msg.id)) messages.add(msg);
+      });
+      _scrollToBottom();
     });
   }
 
   void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 100), () {
       if (scrollController.hasClients) {
-        scrollController.animateTo(
-          scrollController.position.maxScrollExtent + 100,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+        scrollController.animateTo(scrollController.position.maxScrollExtent + 100,
+            duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
       }
     });
   }
@@ -76,7 +67,6 @@ class _ChatScreenState extends State<ChatScreen>
     final content = messageController.text.trim();
     if (content.isEmpty) return;
 
-    // Add locally for instant UI update
     final tempMsg = Message(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       senderId: userId ?? '',
@@ -91,25 +81,14 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> logout() async {
-    socketService.disconnect(); // ✅ removed 'await' since it's void
+    socketService.disconnect();
     await secureStorage.clearAll();
     _redirectToLogin();
   }
 
   void _redirectToLogin() {
     Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-    );
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    scrollController.dispose();
-    messageController.dispose();
-    socketService.disconnect(); // also no 'await'
-    super.dispose();
+        context, MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
   Widget buildMessageBubble(Message message, bool isMe) {
@@ -130,25 +109,17 @@ class _ChatScreenState extends State<ChatScreen>
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
-            bottomLeft:
-                isMe ? const Radius.circular(18) : const Radius.circular(4),
-            bottomRight:
-                isMe ? const Radius.circular(4) : const Radius.circular(18),
+            bottomLeft: isMe ? const Radius.circular(18) : const Radius.circular(4),
+            bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(18),
           ),
         ),
         child: Column(
-          crossAxisAlignment:
-              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            Text(
-              message.content,
-              style: const TextStyle(color: Colors.white, fontSize: 15),
-            ),
+            Text(message.content, style: const TextStyle(color: Colors.white, fontSize: 15)),
             const SizedBox(height: 4),
-            Text(
-              DateFormat('hh:mm a').format(message.timestamp),
-              style: const TextStyle(color: Colors.white60, fontSize: 11),
-            ),
+            Text(DateFormat('hh:mm a').format(message.timestamp),
+                style: const TextStyle(color: Colors.white60, fontSize: 11)),
           ],
         ),
       ),

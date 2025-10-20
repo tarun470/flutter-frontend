@@ -12,17 +12,36 @@ class Message {
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
-    // handle both `senderId` and nested `sender._id`
-    final senderField = json['senderId'] ??
-        (json['sender'] is Map ? json['sender']['_id'] : json['sender']) ??
-        '';
+    String parseId(dynamic field) {
+      if (field == null) return '';
+      if (field is String) return field;
+      if (field is Map && field.containsKey('\$oid')) return field['\$oid'];
+      return '';
+    }
 
-    // handle both timestamp and createdAt fields
-    final timestampStr =
-        json['timestamp'] ?? json['createdAt'] ?? DateTime.now().toIso8601String();
+    String parseDate(dynamic field) {
+      try {
+        if (field == null) return DateTime.now().toIso8601String();
+        if (field is String) return field;
+        if (field is Map && field['\$date'] != null) {
+          if (field['\$date'] is Map && field['\$date']['\$numberLong'] != null) {
+            return DateTime.fromMillisecondsSinceEpoch(
+                    int.parse(field['\$date']['\$numberLong']))
+                .toIso8601String();
+          }
+          return DateTime.parse(field['\$date']).toIso8601String();
+        }
+      } catch (_) {}
+      return DateTime.now().toIso8601String();
+    }
+
+    final id = parseId(json['_id'] ?? json['id']);
+    final senderField = parseId(json['senderId'] ??
+        (json['sender'] is Map ? json['sender']['_id'] : json['sender']));
+    final timestampStr = parseDate(json['timestamp'] ?? json['createdAt']);
 
     return Message(
-      id: json['_id'] ?? json['id'] ?? '',
+      id: id,
       senderId: senderField,
       content: json['content'] ?? '',
       timestamp: DateTime.tryParse(timestampStr) ?? DateTime.now(),

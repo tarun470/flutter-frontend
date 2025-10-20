@@ -37,18 +37,9 @@ class SocketService {
         onConnect?.call();
         if (_onMessageCallback != null) _listenMessageInternal(_onMessageCallback!);
       })
-      ..onDisconnect((_) {
-        print('❌ Socket disconnected');
-        onDisconnect?.call();
-      })
-      ..onError((data) {
-        print('⚠️ Socket error: $data');
-        onError?.call(data);
-      })
-      ..onConnectError((data) {
-        print('⚠️ Connection error: $data');
-        onError?.call(data);
-      });
+      ..onDisconnect((_) => onDisconnect?.call())
+      ..onError((data) => onError?.call(data))
+      ..onConnectError((data) => onError?.call(data));
   }
 
   void listenMessage(MessageCallback callback) {
@@ -62,7 +53,7 @@ class SocketService {
       try {
         final map = data is String ? jsonDecode(data) : Map<String, dynamic>.from(data);
         final msg = Message.fromJson(map);
-        callback(msg);
+        if (msg.id.isNotEmpty) callback(msg);
       } catch (e) {
         print('⚠️ Message parse error: $e');
       }
@@ -70,13 +61,10 @@ class SocketService {
   }
 
   void sendMessage(String content) {
-    if (_socket == null || !_socket!.connected) {
-      print('⚠️ Socket not connected');
-      return;
-    }
+    if (_socket == null || !_socket!.connected) return;
     if (content.trim().isEmpty) return;
-
     _socket!.emit('sendMessage', {'content': content.trim()});
+    print('📤 Sending message: {content: $content}');
   }
 
   void disconnect() {
