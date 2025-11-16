@@ -10,7 +10,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.1.1
   socket_io_client: ^3.1.2
@@ -18,17 +17,13 @@ dependencies:
   http: ^1.1.0
   intl: ^0.18.1
   flutter_secure_storage: ^9.1.0
-
-  # --- New packages required for the features ---
-  image_picker: ^1.1.1           # send images from gallery/camera
-  file_picker: ^8.0.0            # send PDF / files
-  emoji_picker_flutter: ^1.6.1   # emoji picker
-  flutter_animate: ^4.5.0        # animations for typing indicator
-  cached_network_image: ^3.4.1   # image preview & performance
-  uuid: ^4.5.0                   # unique IDs for messages
-  timeago: ^3.6.0                # last seen formatting
-
-  # For push notifications (FCM)
+  image_picker: ^1.1.1
+  file_picker: ^8.0.0
+  emoji_picker_flutter: ^1.6.1
+  flutter_animate: ^4.5.0
+  cached_network_image: ^3.4.1
+  uuid: ^4.5.0
+  timeago: ^3.6.0
   firebase_core: ^3.5.0
   firebase_messaging: ^15.0.0
 
@@ -39,4 +34,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-

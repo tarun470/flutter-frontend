@@ -1,7 +1,6 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 
@@ -78,7 +77,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _redirectToLogin() {
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+    Navigator.pushReplacement(
+        context, MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
   // ---------------- Socket ----------------
@@ -95,8 +95,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       socketService.onTyping = (userIdTyping, typing, usernameTyping) {
         setState(() {
-          if (typing) typingUsers[userIdTyping] = true;
-          else typingUsers.remove(userIdTyping);
+          if (typing) {
+            typingUsers[userIdTyping] = true;
+          } else {
+            typingUsers.remove(userIdTyping);
+          }
         });
       };
 
@@ -125,7 +128,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         final reactions = Map<String, dynamic>.from(payload['reactions'] ?? {});
         setState(() {
           final idx = messages.indexWhere((m) => m.id == mid);
-          if (idx != -1) messages[idx].reactions = reactions.map((k, v) => MapEntry(k, v as int));
+          if (idx != -1) {
+            messages[idx].reactions =
+                reactions.map((k, v) => MapEntry(k, v as int));
+          }
         });
       };
     }, onDisconnect: () {});
@@ -148,7 +154,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final currentlyTyping = text.isNotEmpty;
     if (currentlyTyping != isTyping) {
       isTyping = currentlyTyping;
-      socketService.sendTyping(currentRoom, userId ?? '', username ?? '', isTyping);
+      socketService.sendTyping(
+          currentRoom, userId ?? '', username ?? '', isTyping);
     }
   }
 
@@ -202,34 +209,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   // ---------------- Image / File ----------------
-  Future<void> _pickImage({bool fromCamera = false}) async {
-    final picker = ImagePicker();
-    final picked = fromCamera
-        ? await picker.pickImage(source: ImageSource.camera, maxWidth: 1600)
-        : await picker.pickImage(source: ImageSource.gallery, maxWidth: 1600);
-    if (picked == null) return;
-
-    final upload = await ApiService.uploadFile(picked.path, 'file', token: token);
-    if (upload == null) return;
-
-    final url = upload['url'] ?? upload['path'] ?? upload['fileUrl'];
-    if (url == null) return;
-    socketService.sendImage(url, roomId: currentRoom, senderName: username ?? '');
-  }
-
   Future<void> _pickFile() async {
     final res = await FilePicker.platform.pickFiles(withData: false);
     if (res == null || res.files.isEmpty) return;
+
     final path = res.files.single.path;
     final filename = res.files.single.name;
     if (path == null) return;
 
-    final upload = await ApiService.uploadFile(path, 'file', token: token, filename: filename);
+    final uploadObj = await ApiService.uploadFile(
+        path, 'file', token: token, filename: filename);
+    final upload = uploadObj as Map<String, dynamic>?; // type-safe
     if (upload == null) return;
 
     final url = upload['url'] ?? upload['path'] ?? upload['fileUrl'];
     if (url == null) return;
-    socketService.sendFile(url, filename, roomId: currentRoom, senderName: username ?? '');
+
+    socketService.sendFile(
+        url, filename, roomId: currentRoom, senderName: username ?? '');
   }
 
   // ---------------- UI Helpers ----------------
@@ -277,9 +274,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               ),
             ),
             child: Column(
-              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
-                if (!isMe) Text(m.senderName, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+                if (!isMe)
+                  Text(m.senderName,
+                      style: const TextStyle(
+                          color: Colors.white70, fontWeight: FontWeight.bold)),
                 if (showReply)
                   FutureBuilder<Message?>(
                     future: _findMessageById(m.replyToMessageId!),
@@ -289,36 +290,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       return Container(
                         margin: const EdgeInsets.only(bottom: 6),
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(8)),
-                        child: Text('${replied.senderName}: ${replied.content}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        decoration: BoxDecoration(
+                            color: Colors.white12,
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Text('${replied.senderName}: ${replied.content}',
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 12)),
                       );
                     },
                   ),
-                if (m.type == 'text')
-                  Text(m.content, style: const TextStyle(color: Colors.white, fontSize: 15))
-                else if (m.type == 'image')
-                  GestureDetector(
-                    onTap: () => _showFullImage(m.content),
-                    child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(m.content, height: 160, fit: BoxFit.cover)),
-                  )
-                else if (m.type == 'file')
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.insert_drive_file, color: Colors.white70),
-                      const SizedBox(width: 8),
-                      Flexible(child: Text(m.content, style: const TextStyle(color: Colors.white70))),
-                    ],
-                  ),
+                Text(m.content,
+                    style: const TextStyle(color: Colors.white, fontSize: 15)),
                 const SizedBox(height: 6),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(timeStr, style: const TextStyle(color: Colors.white60, fontSize: 11)),
-                    const SizedBox(width: 8),
-                    if (isMe) _buildTickWidget(m),
-                    const SizedBox(width: 6),
-                    if (m.reactions != null && m.reactions!.isNotEmpty) _buildReactionsRow(m),
+                    Text(timeStr,
+                        style:
+                            const TextStyle(color: Colors.white60, fontSize: 11)),
                   ],
                 ),
               ],
@@ -326,29 +315,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildTickWidget(Message m) {
-    if (m.isSeen) return const Icon(Icons.done_all, color: Colors.blue, size: 16);
-    if (m.isDelivered) return const Icon(Icons.done_all, color: Colors.white70, size: 16);
-    return const Icon(Icons.check, color: Colors.white70, size: 14);
-  }
-
-  Widget _buildReactionsRow(Message m) {
-    return Row(
-      children: m.reactions!.entries.map((e) {
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(12)),
-          child: Row(children: [
-            Text(e.key),
-            const SizedBox(width: 6),
-            Text('${e.value}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-          ]),
-        );
-      }).toList(),
     );
   }
 
@@ -361,13 +327,33 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(leading: const Icon(Icons.reply), title: const Text('Reply'), onTap: () => Navigator.pop(c, 'reply')),
-              if (isMe) ListTile(leading: const Icon(Icons.edit), title: const Text('Edit'), onTap: () => Navigator.pop(c, 'edit')),
-              if (isMe) ListTile(leading: const Icon(Icons.delete), title: const Text('Delete for me'), onTap: () => Navigator.pop(c, 'delete_local')),
-              if (isMe) ListTile(leading: const Icon(Icons.delete_forever), title: const Text('Delete for everyone'), onTap: () => Navigator.pop(c, 'delete_everyone')),
-              ListTile(leading: const Icon(Icons.emoji_emotions), title: const Text('React'), onTap: () => Navigator.pop(c, 'react')),
-              ListTile(leading: const Icon(Icons.share), title: const Text('Forward (not implemented)'), onTap: () => Navigator.pop(c, 'forward')),
-              ListTile(leading: const Icon(Icons.close), title: const Text('Cancel'), onTap: () => Navigator.pop(c, null)),
+              ListTile(
+                  leading: const Icon(Icons.reply),
+                  title: const Text('Reply'),
+                  onTap: () => Navigator.pop(c, 'reply')),
+              if (isMe)
+                ListTile(
+                    leading: const Icon(Icons.edit),
+                    title: const Text('Edit'),
+                    onTap: () => Navigator.pop(c, 'edit')),
+              if (isMe)
+                ListTile(
+                    leading: const Icon(Icons.delete),
+                    title: const Text('Delete for me'),
+                    onTap: () => Navigator.pop(c, 'delete_local')),
+              if (isMe)
+                ListTile(
+                    leading: const Icon(Icons.delete_forever),
+                    title: const Text('Delete for everyone'),
+                    onTap: () => Navigator.pop(c, 'delete_everyone')),
+              ListTile(
+                  leading: const Icon(Icons.emoji_emotions),
+                  title: const Text('React'),
+                  onTap: () => Navigator.pop(c, 'react')),
+              ListTile(
+                  leading: const Icon(Icons.close),
+                  title: const Text('Cancel'),
+                  onTap: () => Navigator.pop(c, null)),
             ],
           ),
         );
@@ -426,17 +412,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return chosen;
   }
 
-  void _showFullImage(String url) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => Scaffold(
-        appBar: AppBar(),
-        backgroundColor: Colors.black,
-        body: Center(child: Image.network(url)),
-      ),
-    ));
-  }
-
-  // ---------------- Top bar / Online users ----------------
+  // ---------------- Top bar ----------------
   PreferredSizeWidget _buildTopBar() {
     final typingCount = typingUsers.length;
     final typingLabel = typingCount > 0 ? 'typing...' : '';
@@ -449,13 +425,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         children: [
           Text(currentRoom, style: const TextStyle(fontSize: 18)),
           const SizedBox(height: 2),
-          Text(typingCount > 0 ? typingLabel : onlineLabel, style: const TextStyle(fontSize: 12)),
+          Text(typingCount > 0 ? typingLabel : onlineLabel,
+              style: const TextStyle(fontSize: 12)),
         ],
       ),
       actions: [
         IconButton(icon: const Icon(Icons.people), onPressed: _showOnlineUsers),
-        IconButton(icon: const Icon(Icons.image), onPressed: () => _pickImage(fromCamera: false)),
-        IconButton(icon: const Icon(Icons.camera_alt), onPressed: () => _pickImage(fromCamera: true)),
         IconButton(icon: const Icon(Icons.attach_file), onPressed: _pickFile),
         IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
       ],
@@ -478,7 +453,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               return ListTile(
                 leading: CircleAvatar(child: Text(name[0])),
                 title: Text(name),
-                subtitle: Text(data['isOnline'] == true ? 'Online' : (lastSeen ?? 'Last seen unknown')),
+                subtitle: Text(data['isOnline'] == true
+                    ? 'Online'
+                    : (lastSeen ?? 'Last seen unknown')),
               );
             },
           ),
@@ -498,7 +475,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       margin: const EdgeInsets.only(bottom: 8, left: 8, right: 8),
-      decoration: BoxDecoration(color: Colors.black.withOpacity(0.8), borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(24)),
       child: Row(
         children: [
           IconButton(
