@@ -16,7 +16,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final secureStorage = SecureStorageService();
   bool loading = false;
 
-  /// Registration without token
   void register() async {
     final username = usernameController.text.trim();
     final password = passwordController.text.trim();
@@ -45,7 +44,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
 
-      // Redirect to login screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -173,4 +171,3 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 }
-

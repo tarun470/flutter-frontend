@@ -32,13 +32,14 @@ class _LoginScreenState extends State<LoginScreen> {
     if (response != null) {
       final token = response['token'] as String?;
       final userId = response['userId'] as String?;
+      final username = response['username'] as String? ?? '';
 
       if (token != null && userId != null) {
         await secureStorage.saveToken(token);
         await secureStorage.saveUserId(userId);
+        await secureStorage.saveUsername(username);
 
-        socketService.connect(token);
-
+        // DO NOT connect socket here. ChatScreen will connect.
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const ChatScreen()),

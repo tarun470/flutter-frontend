@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'constants.dart';
+import '../utils/constants.dart';
 
 InputDecoration neonInputDecoration(String label) {
   return InputDecoration(
@@ -51,5 +51,3 @@ InputDecoration neonInputDecoration(String label) {
     ),
   );
 }
-
-

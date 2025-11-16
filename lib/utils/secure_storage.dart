@@ -1,28 +1,22 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter/foundation.dart'; // for kIsWeb
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 class SecureStorageService {
   final _storage = const FlutterSecureStorage();
 
   static const _jwtKey = 'JWT_TOKEN';
   static const _userIdKey = 'USER_ID';
+  static const _usernameKey = 'USERNAME';
 
-  /// Save JWT token securely
   Future<void> saveToken(String token) async {
     try {
-      if (kIsWeb) {
-        // Web fallback: store in memory or localStorage if needed
-        // For simplicity, using flutter_secure_storage which works with web
-        await _storage.write(key: _jwtKey, value: token);
-      } else {
-        await _storage.write(key: _jwtKey, value: token);
-      }
+      await _storage.write(key: _jwtKey, value: token);
     } catch (e) {
       debugPrint('Error saving token: $e');
     }
   }
 
-  /// Retrieve JWT token
   Future<String?> getToken() async {
     try {
       return await _storage.read(key: _jwtKey);
@@ -32,7 +26,6 @@ class SecureStorageService {
     }
   }
 
-  /// Delete JWT token
   Future<void> deleteToken() async {
     try {
       await _storage.delete(key: _jwtKey);
@@ -41,7 +34,6 @@ class SecureStorageService {
     }
   }
 
-  /// Save User ID securely
   Future<void> saveUserId(String id) async {
     try {
       await _storage.write(key: _userIdKey, value: id);
@@ -50,7 +42,6 @@ class SecureStorageService {
     }
   }
 
-  /// Retrieve User ID
   Future<String?> getUserId() async {
     try {
       return await _storage.read(key: _userIdKey);
@@ -60,7 +51,6 @@ class SecureStorageService {
     }
   }
 
-  /// Delete User ID
   Future<void> deleteUserId() async {
     try {
       await _storage.delete(key: _userIdKey);
@@ -69,7 +59,23 @@ class SecureStorageService {
     }
   }
 
-  /// Clear all secure storage
+  Future<void> saveUsername(String username) async {
+    try {
+      await _storage.write(key: _usernameKey, value: username);
+    } catch (e) {
+      debugPrint('Error saving username: $e');
+    }
+  }
+
+  Future<String?> getUsername() async {
+    try {
+      return await _storage.read(key: _usernameKey);
+    } catch (e) {
+      debugPrint('Error reading username: $e');
+      return null;
+    }
+  }
+
   Future<void> clearAll() async {
     try {
       await _storage.deleteAll();
