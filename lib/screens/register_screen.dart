@@ -13,12 +13,14 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  final TextEditingController nicknameController = TextEditingController();
   final secureStorage = SecureStorageService();
   bool loading = false;
 
   void register() async {
     final username = usernameController.text.trim();
     final password = passwordController.text.trim();
+    final nickname = nicknameController.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -32,7 +34,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => loading = true);
 
-    final response = await ApiService.register(username, password);
+    // Call API with nickname
+    final response = await ApiService.register(username, password, nickname: nickname.isEmpty ? null : nickname);
 
     setState(() => loading = false);
 
@@ -94,7 +97,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 32),
+                      // Username
                       TextField(
                         controller: usernameController,
                         style: const TextStyle(color: Colors.white),
@@ -110,6 +114,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
+                      // Nickname
+                      TextField(
+                        controller: nicknameController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Nickname (optional)',
+                          hintStyle: const TextStyle(color: Colors.white54),
+                          filled: true,
+                          fillColor: Colors.grey[900],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Password
                       TextField(
                         controller: passwordController,
                         obscureText: true,
