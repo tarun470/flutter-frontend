@@ -139,13 +139,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         });
       };
 
-      // message delivered / seen handlers (if your SocketService exposes them)
       socketService.onMessageDelivered = (msg) {
         setState(() {
           final idx = messages.indexWhere((m) => m.id == msg.id);
           if (idx != -1) {
             messages[idx].isDelivered = true;
-            messages[idx].deliveredTo = msg.deliveredTo ?? messages[idx].deliveredTo;
+            messages[idx].deliveredTo =
+                msg.deliveredTo ?? messages[idx].deliveredTo;
           }
         });
       };
@@ -159,7 +159,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           }
         });
       };
-
     }, onDisconnect: () {});
   }
 
@@ -233,7 +232,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     socketService.addReaction(messageId, emoji);
   }
 
-  // ---------------- Image / File ----------------
+  // ---------------- File/Image ----------------
   Future<void> _pickFile() async {
     final res = await FilePicker.platform.pickFiles(withData: false);
     if (res == null || res.files.isEmpty) return;
@@ -244,7 +243,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     final uploadObj = await ApiService.uploadFile(
         path, 'file', token: token, filename: filename);
-    final upload = uploadObj as Map<String, dynamic>?; // type-safe
+    final upload = uploadObj as Map<String, dynamic>?;
     if (upload == null) return;
 
     final url = upload['url'] ?? upload['path'] ?? upload['fileUrl'];
@@ -271,21 +270,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return m.id.isEmpty ? null : m;
   }
 
-  // Helper: render status ticks
   Widget _buildStatusIcon(Message m) {
     if (m.senderId != (userId ?? '')) return const SizedBox.shrink();
 
-    // sending (no server ack yet)
     if (!m.isDelivered && !m.isSeen) {
       return const Icon(Icons.watch_later_outlined, size: 14, color: Colors.white38);
     }
 
-    // delivered only
     if (m.isDelivered && !m.isSeen) {
       return const Icon(Icons.done, size: 14, color: Colors.white70);
     }
 
-    // seen
     if (m.isSeen) {
       return const Icon(Icons.done_all, size: 14, color: Colors.lightBlueAccent);
     }
@@ -295,22 +290,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Widget _buildImagePreview(String url) {
     return GestureDetector(
-      onTap: () {
-        showDialog(
-          context: context,
-          builder: (_) => GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: Container(
-              color: Colors.black87,
-              child: Center(
-                child: InteractiveViewer(
-                  child: Image.network(url, fit: BoxFit.contain),
-                ),
-              ),
-            ),
+      onTap: () => showDialog(
+        context: context,
+        builder: (_) => GestureDetector(
+          onTap: () => Navigator.of(context).pop(),
+          child: Container(
+            color: Colors.black87,
+            child: Center(child: InteractiveViewer(child: Image.network(url, fit: BoxFit.contain))),
           ),
-        );
-      },
+        ),
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Image.network(
@@ -348,39 +337,30 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               children: [
                 Text(filename, style: const TextStyle(color: Colors.white70), overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 6),
-                Text('Tap to open', style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                const Text('Tap to open', style: TextStyle(color: Colors.white38, fontSize: 12)),
               ],
             ),
           ),
           const SizedBox(width: 10),
           IconButton(
             icon: const Icon(Icons.open_in_new, color: Colors.white70),
-            onPressed: () {
-              // open in browser (works on web & mobile with url_launcher if added)
-              // fallback: copy to clipboard or show dialog
-              // For now, show dialog with URL
-              showDialog(context: context, builder: (_) {
-                return AlertDialog(
-                  title: const Text('File URL'),
-                  content: SelectableText(url),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))
-                  ],
-                );
-              });
-            },
+            onPressed: () => showDialog(context: context, builder: (_) => AlertDialog(
+              title: const Text('File URL'),
+              content: SelectableText(url),
+              actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+            )),
           )
         ],
       ),
     );
   }
 
+  // ---------------- Message Tile ----------------
   Widget _buildMessageTile(Message m) {
     final isMe = m.senderId == (userId ?? '');
     final timeStr = DateFormat('hh:mm a').format(m.timestamp.toLocal());
     final showReply = m.replyToMessageId != null && m.replyToMessageId!.isNotEmpty;
 
-    // shadow-frame watermark border (subtle)
     final bubbleDecoration = BoxDecoration(
       gradient: LinearGradient(
         colors: isMe
@@ -399,12 +379,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           blurRadius: 8,
           offset: const Offset(0, 3),
         ),
-        // subtle inner border
         BoxShadow(
           color: Colors.white.withOpacity(0.02),
           blurRadius: 1,
           spreadRadius: 0.5,
-          offset: const Offset(0, 0),
         ),
       ],
     );
@@ -420,15 +398,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
             decoration: bubbleDecoration,
             child: Column(
-              crossAxisAlignment:
-                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 if (!isMe)
-                  Text(
-                    m.senderName,
-                    style: const TextStyle(
-                        color: Colors.white70, fontWeight: FontWeight.bold),
-                  ),
+                  Text(m.senderName, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
                 if (showReply)
                   FutureBuilder<Message?>(
                     future: _findMessageById(m.replyToMessageId!),
@@ -451,17 +424,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       );
                     },
                   ),
-                // Content: either text / image / file
-                if (m.type == 'image' && (m.content.isNotEmpty))
-                  _buildImagePreview(m.content)
-                else if (m.type == 'file' && (m.content.isNotEmpty))
-                  _buildFileCard(m.content, m.fileName ?? 'file')
-                else
-                  Text(m.content, style: const TextStyle(color: Colors.white, fontSize: 15)),
-
+                if (m.type == 'image' && m.content.isNotEmpty) _buildImagePreview(m.content)
+                else if (m.type == 'file' && m.content.isNotEmpty) _buildFileCard(m.content, m.fileName ?? 'file')
+                else Text(m.content, style: const TextStyle(color: Colors.white, fontSize: 15)),
                 const SizedBox(height: 8),
-
-                // Time + status on same row
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -478,25 +444,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
+  // ---------------- Long Press Actions ----------------
   void _onMessageLongPress(Message m) async {
     final isMe = m.senderId == (userId ?? '');
     final choice = await showModalBottomSheet<String>(
       context: context,
-      builder: (c) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(leading: const Icon(Icons.reply), title: const Text('Reply'), onTap: () => Navigator.pop(c, 'reply')),
-              if (isMe) ListTile(leading: const Icon(Icons.edit), title: const Text('Edit'), onTap: () => Navigator.pop(c, 'edit')),
-              if (isMe) ListTile(leading: const Icon(Icons.delete), title: const Text('Delete for me'), onTap: () => Navigator.pop(c, 'delete_local')),
-              if (isMe) ListTile(leading: const Icon(Icons.delete_forever), title: const Text('Delete for everyone'), onTap: () => Navigator.pop(c, 'delete_everyone')),
-              ListTile(leading: const Icon(Icons.emoji_emotions), title: const Text('React'), onTap: () => Navigator.pop(c, 'react')),
-              ListTile(leading: const Icon(Icons.close), title: const Text('Cancel'), onTap: () => Navigator.pop(c, null)),
-            ],
-          ),
-        );
-      },
+      builder: (c) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(leading: const Icon(Icons.reply), title: const Text('Reply'), onTap: () => Navigator.pop(c, 'reply')),
+            if (isMe) ListTile(leading: const Icon(Icons.edit), title: const Text('Edit'), onTap: () => Navigator.pop(c, 'edit')),
+            if (isMe) ListTile(leading: const Icon(Icons.delete), title: const Text('Delete for me'), onTap: () => Navigator.pop(c, 'delete_local')),
+            if (isMe) ListTile(leading: const Icon(Icons.delete_forever), title: const Text('Delete for everyone'), onTap: () => Navigator.pop(c, 'delete_everyone')),
+            ListTile(leading: const Icon(Icons.emoji_emotions), title: const Text('React'), onTap: () => Navigator.pop(c, 'react')),
+            ListTile(leading: const Icon(Icons.close), title: const Text('Cancel'), onTap: () => Navigator.pop(c, null)),
+          ],
+        ),
+      ),
     );
 
     if (choice == null) return;
@@ -515,39 +480,34 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<String?> _showEditDialog(String oldText) async {
     final ctrl = TextEditingController(text: oldText);
-    final res = await showDialog<String?>(
+    return showDialog<String?>(
       context: context,
-      builder: (c) {
-        return AlertDialog(
-          backgroundColor: Colors.grey[900],
-          title: const Text('Edit Message'),
-          content: TextField(controller: ctrl, style: const TextStyle(color: Colors.white)),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c, null), child: const Text('Cancel')),
-            TextButton(onPressed: () => Navigator.pop(c, ctrl.text), child: const Text('Save')),
-          ],
-        );
-      },
+      builder: (c) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Edit Message'),
+        content: TextField(controller: ctrl, style: const TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, null), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(c, ctrl.text), child: const Text('Save')),
+        ],
+      ),
     );
-    return res;
   }
 
   Future<String?> _showEmojiPickerDialog() async {
     String? chosen;
     await showModalBottomSheet(
       context: context,
-      builder: (c) {
-        return SizedBox(
-          height: 320,
-          child: EmojiPicker(
-            onEmojiSelected: (cat, emoji) {
-              chosen = emoji.emoji;
-              Navigator.pop(c);
-            },
-            config: const Config(columns: 8, emojiSizeMax: 32),
-          ),
-        );
-      },
+      builder: (c) => SizedBox(
+        height: 320,
+        child: EmojiPicker(
+          onEmojiSelected: (cat, emoji) {
+            chosen = emoji.emoji;
+            Navigator.pop(c);
+          },
+          config: const Config(columns: 8, emojiSizeMax: 32),
+        ),
+      ),
     );
     return chosen;
   }
@@ -648,6 +608,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               onChanged: _onTextChanged,
               minLines: 1,
               maxLines: 5,
+              onSubmitted: (_) => _sendText(),
             ),
           ),
           IconButton(icon: const Icon(Icons.attach_file, color: Colors.white70), onPressed: _pickFile),
@@ -664,7 +625,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       appBar: _buildTopBar(),
       body: Column(
         children: [
-          // Watermark shadow frame header
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -675,8 +635,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               child: Text('CHAT — $currentRoom', style: const TextStyle(color: Colors.white24, fontSize: 12, fontWeight: FontWeight.bold)),
             ),
           ),
-
-          // Messages
           Expanded(
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -698,8 +656,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           itemCount: messages.length,
                           itemBuilder: (context, i) => _buildMessageTile(messages[i]),
                         ),
-
-                        // Typing indicator bottom-left
                         Positioned(
                           left: 8,
                           bottom: 8,
@@ -721,8 +677,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     ),
             ),
           ),
-
-          // Emoji area
           if (showEmoji)
             SizedBox(
               height: 250,
@@ -734,8 +688,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 config: const Config(columns: 8, emojiSizeMax: 32),
               ),
             ),
-
-          // Input
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: _buildInputArea(),
