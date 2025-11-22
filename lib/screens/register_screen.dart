@@ -20,14 +20,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void register() async {
     final username = usernameController.text.trim();
     final password = passwordController.text.trim();
-    final nickname = nicknameController.text.trim().isEmpty
-        ? null
-        : nicknameController.text.trim();
+    final nickname = nicknameController.text.trim();
 
-    if (username.isEmpty || password.isEmpty) {
+    // 🔴 Mandatory fields check
+    if (username.isEmpty || password.isEmpty || nickname.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter username and password'),
+          content: Text('Please enter username, password & nickname'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -36,8 +35,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => loading = true);
 
-    final response =
-        await ApiService.register(username, password, nickname: nickname);
+    // Send nickname mandatorily
+    final response = await ApiService.register(
+      username,
+      password,
+      nickname: nickname,
+    );
 
     setState(() => loading = false);
 
@@ -101,6 +104,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 40),
+
                       // Username field
                       TextField(
                         controller: usernameController,
@@ -117,14 +121,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                         ),
                       ),
+
                       const SizedBox(height: 16),
-                      // Nickname field (optional)
+
+                      // Nickname field (Mandatory)
                       TextField(
                         controller: nicknameController,
                         style: const TextStyle(color: Colors.white),
                         autofillHints: const [AutofillHints.name],
                         decoration: InputDecoration(
-                          hintText: 'Nickname (optional)',
+                          hintText: 'Nickname',
                           hintStyle: const TextStyle(color: Colors.white54),
                           filled: true,
                           fillColor: Colors.grey[900],
@@ -134,7 +140,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                         ),
                       ),
+
                       const SizedBox(height: 16),
+
                       // Password field
                       TextField(
                         controller: passwordController,
@@ -152,7 +160,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                         ),
                       ),
+
                       const SizedBox(height: 24),
+
                       ElevatedButton(
                         onPressed: loading ? null : register,
                         style: ElevatedButton.styleFrom(
@@ -173,7 +183,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                               ),
                       ),
+
                       const SizedBox(height: 16),
+
                       TextButton(
                         onPressed: () {
                           Navigator.pushReplacement(
