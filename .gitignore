@@ -2,13 +2,13 @@
 # Flutter / Dart / Pub
 # -------------------------------
 .dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
 .packages
 .pub-cache/
 .pub/
 **/doc/api/
 **/ios/Flutter/.last_build_id
+.flutter-plugins
+.flutter-plugins-dependencies
 
 # -------------------------------
 # Flutter / Build
@@ -27,7 +27,7 @@
 *.ipr
 *.iws
 .idea/
-.vscode/          # uncomment if you want to track VS Code configs
+.vscode/
 *.log
 *.class
 *.pyc
@@ -44,15 +44,16 @@ migrate_working_dir/
 # -------------------------------
 # Android / Gradle
 # -------------------------------
-/android/app/debug
-/android/app/profile
-/android/app/release
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+/android/app/build/
 *.apk
 *.ap_
 *.aab
 .gradle/
 /captures/
-/output.json
+output.json
 
 # -------------------------------
 # iOS
@@ -62,6 +63,8 @@ migrate_working_dir/
 /ios/Flutter/Flutter.podspec
 /ios/Runner.xcworkspace/
 /ios/Runner/GeneratedPluginRegistrant.*
+/ios/Flutter/Flutter.framework
+/ios/Flutter/Flutter.podspec
 
 # -------------------------------
 # MacOS / Linux
