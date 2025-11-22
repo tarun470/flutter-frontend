@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../utils/secure_storage.dart';
 import '../utils/constants.dart';
-import '../widgets/neon_input_decoration.dart';
+import '../utils/neon_input.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
