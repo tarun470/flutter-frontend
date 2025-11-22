@@ -16,14 +16,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController passwordController = TextEditingController();
   final secureStorage = SecureStorageService();
   bool loading = false;
-  bool passwordVisible = false;
 
   void register() async {
     final username = usernameController.text.trim();
-    final password = passwordController.text.trim();
     final nickname = nicknameController.text.trim();
+    final password = passwordController.text.trim();
 
-    if (username.isEmpty || password.isEmpty || nickname.isEmpty) {
+    if (username.isEmpty || nickname.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter username, password & nickname'),
@@ -47,7 +46,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              '✅ Registered successfully! Please login, ${response['username']}.'), 
+              '✅ Registered successfully! Please login, ${response['username']}'),
           backgroundColor: Colors.green,
         ),
       );
@@ -67,166 +66,157 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _buildTextField({
-    required String hint,
-    required TextEditingController controller,
-    bool obscureText = false,
-    IconData? icon,
-    Widget? suffix,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: controller,
-          obscureText: obscureText,
-          style: const TextStyle(color: Colors.amberAccent, fontSize: 16),
-          decoration: InputDecoration(
-            prefixIcon: icon != null
-                ? Icon(icon, color: Colors.amberAccent)
-                : null,
-            suffixIcon: suffix,
-            hintText: hint,
-            hintStyle: const TextStyle(color: Colors.amber[200]),
-            filled: true,
-            fillColor: Colors.black87,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
-              child: Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Colors.black87, Colors.black54],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: Colors.amberAccent.withOpacity(0.7),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.amber.withOpacity(0.4),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      '🤝 REAL TIME CHAT 🤝',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.amberAccent,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final horizontalPadding = constraints.maxWidth * 0.1;
+          final verticalPadding = constraints.maxHeight * 0.08;
+
+          return SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                  horizontal: horizontalPadding, vertical: verticalPadding),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 450),
+                  child: Container(
+                    padding: const EdgeInsets.all(28),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.85),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Colors.amberAccent.withOpacity(0.8),
+                        width: 1.5,
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 40),
-
-                    _buildTextField(
-                      hint: 'Username',
-                      controller: usernameController,
-                      icon: Icons.person,
-                    ),
-
-                    _buildTextField(
-                      hint: 'Nickname',
-                      controller: nicknameController,
-                      icon: Icons.edit,
-                    ),
-
-                    _buildTextField(
-                      hint: 'Password',
-                      controller: passwordController,
-                      obscureText: !passwordVisible,
-                      icon: Icons.lock,
-                      suffix: IconButton(
-                        icon: Icon(
-                          passwordVisible
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                          color: Colors.amberAccent,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.amber.withOpacity(0.3),
+                          blurRadius: 12,
+                          spreadRadius: 2,
                         ),
-                        onPressed: () {
-                          setState(() {
-                            passwordVisible = !passwordVisible;
-                          });
-                        },
-                      ),
+                      ],
                     ),
-
-                    const SizedBox(height: 32),
-
-                    ElevatedButton(
-                      onPressed: loading ? null : register,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 100, vertical: 18),
-                        backgroundColor: Colors.amber[700],
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          '🤝 REAL TIME CHAT 🤝',
+                          style: TextStyle(
+                            fontSize: 34,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        elevation: 8,
-                        shadowColor: Colors.amberAccent,
-                      ),
-                      child: loading
-                          ? const CircularProgressIndicator(
-                              color: Colors.black,
-                            )
-                          : const Text(
-                              'REGISTER',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black,
+                        const SizedBox(height: 36),
+
+                        // Username
+                        TextField(
+                          controller: usernameController,
+                          style: const TextStyle(color: Colors.amber),
+                          autofillHints: const [AutofillHints.username],
+                          decoration: InputDecoration(
+                            hintText: 'Username',
+                            hintStyle: TextStyle(color: Colors.amber[200]),
+                            filled: true,
+                            fillColor: Colors.grey[900],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+
+                        // Nickname (mandatory)
+                        TextField(
+                          controller: nicknameController,
+                          style: const TextStyle(color: Colors.amber),
+                          autofillHints: const [AutofillHints.name],
+                          decoration: InputDecoration(
+                            hintText: 'Nickname',
+                            hintStyle: TextStyle(color: Colors.amber[200]),
+                            filled: true,
+                            fillColor: Colors.grey[900],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+
+                        // Password
+                        TextField(
+                          controller: passwordController,
+                          obscureText: true,
+                          style: const TextStyle(color: Colors.amber),
+                          autofillHints: const [AutofillHints.password],
+                          decoration: InputDecoration(
+                            hintText: 'Password',
+                            hintStyle: TextStyle(color: Colors.amber[200]),
+                            filled: true,
+                            fillColor: Colors.grey[900],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 26),
+
+                        // Register button
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: loading ? null : register,
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 18),
+                              backgroundColor: Colors.amber,
+                              foregroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
                               ),
                             ),
-                    ),
+                            child: loading
+                                ? const CircularProgressIndicator(
+                                    color: Colors.black)
+                                : const Text(
+                                    'REGISTER',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
 
-                    const SizedBox(height: 16),
-
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const LoginScreen()),
-                        );
-                      },
-                      child: const Text(
-                        'Already have an account? Login',
-                        style: TextStyle(color: Colors.amberAccent),
-                      ),
+                        // Login redirect
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const LoginScreen()),
+                            );
+                          },
+                          child: const Text(
+                            'Already have an account? Login',
+                            style: TextStyle(color: Colors.amberAccent),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
