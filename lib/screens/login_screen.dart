@@ -17,10 +17,11 @@ class _LoginScreenState extends State<LoginScreen> {
   final storage = SecureStorageService();
 
   bool loading = false;
+  bool showPassword = false;
 
-  // ---------------------- FIXED LOGIN LOGIC ----------------------
+  // ---------------------- LOGIN LOGIC ----------------------
   Future<void> login() async {
-    final username = usernameCtrl.text.trim();
+    final username = usernameCtrl.text.trim().toLowerCase();
     final password = passwordCtrl.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
@@ -35,26 +36,21 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => loading = false);
 
     if (res == null) {
-      _showError("Server error or invalid credentials");
+      _showError("Invalid username or password");
       return;
     }
 
-    // Backend returns: { token, user: { id, username, nickname } }
     final token = res["token"];
     final user = res["user"];
 
     if (token == null || user == null) {
-      _showError("Invalid server response");
+      _showError("Unexpected server error");
       return;
     }
 
-    final userId = user["id"];
-    final uname = user["username"];
-    final nickname = user["nickname"] ?? uname;
-
     await storage.saveToken(token);
-    await storage.saveUserId(userId);
-    await storage.saveUsername(nickname);
+    await storage.saveUserId(user.id);
+    await storage.saveUsername(user.nickname);
 
     Navigator.pushReplacement(
       context,
@@ -86,6 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: _buildGlassLoginCard(),
             ),
           ),
+
           if (loading) _buildLoadingOverlay(),
         ],
       ),
@@ -108,34 +105,33 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ---------------------- GLASSMORPHIC CARD ----------------------
+  // ---------------------- GLASS CARD ----------------------
   Widget _buildGlassLoginCard() {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 500),
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.all(26),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: Colors.white.withOpacity(0.08),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.blueAccent.withOpacity(0.35)),
+        border: Border.all(color: Colors.blueAccent.withOpacity(0.4)),
         boxShadow: [
           BoxShadow(
             color: Colors.blueAccent.withOpacity(0.3),
-            blurRadius: 30,
-            spreadRadius: 1,
-          )
+            blurRadius: 28,
+          ),
         ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           _buildTitle(),
-          const SizedBox(height: 32),
-          _buildInput(usernameCtrl, "Username", Icons.person),
-          const SizedBox(height: 18),
-          _buildInput(passwordCtrl, "Password", Icons.lock, obscure: true),
           const SizedBox(height: 28),
+          _buildInput(usernameCtrl, "Username", Icons.person),
+          const SizedBox(height: 16),
+          _buildPasswordInput(),
+          const SizedBox(height: 26),
           _buildLoginButton(),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           _buildRegisterLink(),
         ],
       ),
@@ -154,8 +150,8 @@ class _LoginScreenState extends State<LoginScreen> {
             color: Colors.blueAccent.shade100,
             shadows: [
               Shadow(
-                color: Colors.blueAccent.withOpacity(0.9),
-                blurRadius: 30,
+                color: Colors.blueAccent.withOpacity(0.8),
+                blurRadius: 28,
               ),
             ],
           ),
@@ -163,25 +159,51 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(height: 8),
         const Text(
           "Welcome back 👋",
-          style: TextStyle(color: Colors.white70, fontSize: 14),
+          style: TextStyle(color: Colors.white70, fontSize: 15),
         ),
       ],
     );
   }
 
-  // ---------------------- INPUT FIELD ----------------------
-  Widget _buildInput(TextEditingController ctrl, String hint, IconData icon,
-      {bool obscure = false}) {
+  // ---------------------- TEXT INPUT ----------------------
+  Widget _buildInput(
+      TextEditingController ctrl, String hint, IconData icon) {
     return TextField(
       controller: ctrl,
-      obscureText: obscure,
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         prefixIcon: Icon(icon, color: Colors.blueAccent),
         hintText: hint,
         hintStyle: const TextStyle(color: Colors.white54),
         filled: true,
-        fillColor: Colors.black.withOpacity(0.4),
+        fillColor: Colors.black.withOpacity(0.45),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+
+  // ---------------------- PASSWORD INPUT WITH TOGGLE ----------------------
+  Widget _buildPasswordInput() {
+    return TextField(
+      controller: passwordCtrl,
+      obscureText: !showPassword,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        prefixIcon: const Icon(Icons.lock, color: Colors.blueAccent),
+        suffixIcon: IconButton(
+          icon: Icon(
+            showPassword ? Icons.visibility : Icons.visibility_off,
+            color: Colors.white70,
+          ),
+          onPressed: () => setState(() => showPassword = !showPassword),
+        ),
+        hintText: "Password",
+        hintStyle: const TextStyle(color: Colors.white54),
+        filled: true,
+        fillColor: Colors.black.withOpacity(0.45),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
@@ -202,7 +224,7 @@ class _LoginScreenState extends State<LoginScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          elevation: 12,
+          elevation: 10,
         ),
         child: const Text(
           "LOGIN",
@@ -224,7 +246,7 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => const RegisterScreen()),
       ),
       child: const Text(
-        "Don't have an account? Sign up",
+        "Don't have an account? Create one",
         style: TextStyle(color: Colors.white70, fontSize: 15),
       ),
     );
