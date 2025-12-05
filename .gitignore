@@ -1,6 +1,6 @@
-# -------------------------------
+# --------------------------------
 # Flutter / Dart / Pub
-# -------------------------------
+# --------------------------------
 .dart_tool/
 .packages
 .pub-cache/
@@ -10,74 +10,68 @@
 .flutter-plugins
 .flutter-plugins-dependencies
 
-# -------------------------------
-# Flutter / Build
-# -------------------------------
-/build/           # ignore all build folders
-!build/web/       # except web build for deployment
+# --------------------------------
+# Flutter Build Output
+# --------------------------------
+build/                # ignore everything in build
+!build/web/           # EXCEPT web build (keep for deployment)
 
-# -------------------------------
-# Windows / VS Code / IDE
-# -------------------------------
+# --------------------------------
+# IDE / Editor Files
+# --------------------------------
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
 *.suo
 *.user
 *.userosscache
 *.sln.docstates
-*.iml
-*.ipr
-*.iws
-.idea/
-.vscode/
+
+# --------------------------------
+# Misc System Files
+# --------------------------------
+.DS_Store
 *.log
 *.class
 *.pyc
 *.swp
-.DS_Store
 .atom/
+.svn/
+.history
 .build/
 .buildlog/
-.history
-.svn/
-.swiftpm/
 migrate_working_dir/
 
-# -------------------------------
+# --------------------------------
 # Android / Gradle
-# -------------------------------
-/android/app/debug/
-/android/app/profile/
-/android/app/release/
-/android/app/build/
+# --------------------------------
+.gradle/
+android/app/build/
+android/app/debug/
+android/app/profile/
+android/app/release/
 *.apk
 *.ap_
 *.aab
-.gradle/
-/captures/
+captures/
 output.json
 
-# -------------------------------
+# --------------------------------
 # iOS
-# -------------------------------
-/ios/Pods/
-/ios/.symlinks/
-/ios/Flutter/Flutter.podspec
-/ios/Runner.xcworkspace/
-/ios/Runner/GeneratedPluginRegistrant.*
-/ios/Flutter/Flutter.framework
-/ios/Flutter/Flutter.podspec
+# --------------------------------
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.podspec
+ios/Runner.xcworkspace/
+ios/Runner/GeneratedPluginRegistrant.*
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
 
-# -------------------------------
-# MacOS / Linux
-# -------------------------------
-/macos/Flutter/Flutter.podspec
-/macos/Flutter/GeneratedPluginRegistrant.*
-/linux/flutter/generated_plugin_registrant.cc
-
-# -------------------------------
-# Miscellaneous
-# -------------------------------
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
+# --------------------------------
+# macOS / Linux
+# --------------------------------
+macos/Flutter/Flutter.podspec
+macos/Flutter/GeneratedPluginRegistrant.*
+linux/flutter/generated_plugin_registrant.cc
