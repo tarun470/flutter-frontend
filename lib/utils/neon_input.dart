@@ -1,53 +1,64 @@
 import 'package:flutter/material.dart';
 import 'constants.dart';
 
-InputDecoration neonInputDecoration(String label) {
+InputDecoration neonInputDecoration(
+  String label, {
+  IconData? prefixIcon,
+  IconData? suffixIcon,
+  VoidCallback? onSuffixTap,
+  String? hintText,
+}) {
+  final glowPrimary = Constants.primary.withOpacity(0.75);
+  final glowAccent = Constants.accent.withOpacity(0.75);
+
+  OutlineInputBorder _border(Color color, double width) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: color, width: width),
+      );
+
   return InputDecoration(
     labelText: label,
+    hintText: hintText,
+    hintStyle: TextStyle(
+      color: Colors.white70,
+      fontSize: 14,
+      shadows: [
+        Shadow(
+          color: Colors.black.withOpacity(0.6),
+          blurRadius: 6,
+        )
+      ],
+    ),
     labelStyle: TextStyle(
       color: Constants.primary,
       fontWeight: FontWeight.bold,
       shadows: [
-        Shadow(
-          color: Constants.accent.withOpacity(0.7),
-          blurRadius: 12,
-          offset: const Offset(0, 0),
-        ),
-        Shadow(
-          color: Constants.primary.withOpacity(0.5),
-          blurRadius: 20,
-          offset: const Offset(0, 0),
-        ),
+        Shadow(color: glowAccent, blurRadius: 8),
+        Shadow(color: glowPrimary, blurRadius: 14),
       ],
     ),
-    enabledBorder: OutlineInputBorder(
-      borderSide: BorderSide(color: Constants.primary, width: 2),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderSide: BorderSide(color: Constants.accent, width: 3),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderSide: BorderSide(color: Colors.redAccent, width: 2),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    focusedErrorBorder: OutlineInputBorder(
-      borderSide: BorderSide(color: Colors.redAccent, width: 3),
-      borderRadius: BorderRadius.circular(16),
-    ),
+
+    // Neon Borders
+    enabledBorder: _border(Constants.primary, 2),
+    focusedBorder: _border(Constants.accent, 3),
+    errorBorder: _border(Colors.redAccent, 2),
+    focusedErrorBorder: _border(Colors.redAccent, 3),
+
     filled: true,
-    fillColor: Colors.black.withOpacity(0.25),
+    fillColor: Colors.black.withOpacity(0.30),
+
     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-    hintStyle: TextStyle(
-      color: Colors.white70,
-      shadows: [
-        Shadow(
-          color: Colors.black.withOpacity(0.5),
-          blurRadius: 4,
-          offset: const Offset(1, 1),
-        ),
-      ],
-    ),
+
+    // Prefix & Suffix Icons
+    prefixIcon: prefixIcon != null
+        ? Icon(prefixIcon, color: Constants.primary)
+        : null,
+
+    suffixIcon: suffixIcon != null
+        ? GestureDetector(
+            onTap: onSuffixTap,
+            child: Icon(suffixIcon, color: Constants.primary),
+          )
+        : null,
   );
 }

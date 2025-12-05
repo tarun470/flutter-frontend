@@ -9,259 +9,268 @@ class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
 
   @override
-  _RegisterScreenState createState() => _RegisterScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
 class _RegisterScreenState extends State<RegisterScreen>
     with SingleTickerProviderStateMixin {
-  final TextEditingController usernameController = TextEditingController();
-  final TextEditingController nicknameController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-  final secureStorage = SecureStorageService();
-  bool loading = false;
-  bool passwordVisible = false;
+  final usernameCtrl = TextEditingController();
+  final nicknameCtrl = TextEditingController();
+  final passwordCtrl = TextEditingController();
+  final storage = SecureStorageService();
 
-  late AnimationController _animationController;
-  late Animation<double> _glowAnimation;
+  bool loading = false;
+  bool showPassword = false;
+
+  late AnimationController glowController;
+  late Animation<double> glow;
 
   @override
   void initState() {
     super.initState();
-    _animationController =
-        AnimationController(vsync: this, duration: const Duration(seconds: 2))
-          ..repeat(reverse: true);
-    _glowAnimation =
-        Tween<double>(begin: 0.5, end: 1.0).animate(_animationController);
+
+    glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
+    glow = Tween<double>(begin: 0.4, end: 1.0).animate(glowController);
   }
 
   @override
   void dispose() {
-    usernameController.dispose();
-    nicknameController.dispose();
-    passwordController.dispose();
-    _animationController.dispose();
+    usernameCtrl.dispose();
+    nicknameCtrl.dispose();
+    passwordCtrl.dispose();
+    glowController.dispose();
     super.dispose();
   }
 
-  void register() async {
-    final username = usernameController.text.trim();
-    final nickname = nicknameController.text.trim();
-    final password = passwordController.text.trim();
+  // ---------------------- REGISTER LOGIC ----------------------
+  Future<void> register() async {
+    final username = usernameCtrl.text.trim();
+    final nick = nicknameCtrl.text.trim();
+    final pass = passwordCtrl.text.trim();
 
-    if (username.isEmpty || nickname.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter username, password & nickname'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+    if (username.isEmpty || nick.isEmpty || pass.isEmpty) {
+      _error("Please fill all the fields.");
       return;
     }
 
     setState(() => loading = true);
 
-    final response = await ApiService.register(
-      username,
-      password,
-      nickname: nickname,
-    );
+    final res = await ApiService.register(username, pass, nickname: nick);
 
     setState(() => loading = false);
 
-    if (response != null) {
+    if (res != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-              '✅ Registered successfully! Please login, ${response['username']}'),
-          backgroundColor: Colors.green,
-        ),
+            content: Text(
+                "🎉 Registered successfully! Please login, ${res['username']}"),
+            backgroundColor: Colors.green),
       );
 
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
-      return;
+    } else {
+      _error("Registration failed. Username may be taken.");
     }
+  }
 
+  void _error(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('❌ Registration failed. Try another username.'),
-        backgroundColor: Colors.redAccent,
-      ),
+      SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
     );
   }
 
+  // ---------------------- UI ----------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final horizontalPadding = constraints.maxWidth * 0.1;
-          final verticalPadding = constraints.maxHeight * 0.08;
+      body: Stack(
+        children: [
+          _background(),
+          Center(child: _formCard()),
+          if (loading) _loadingOverlay(),
+        ],
+      ),
+    );
+  }
 
-          return SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                  horizontal: horizontalPadding, vertical: verticalPadding),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 500),
-                  child: AnimatedBuilder(
-                    animation: _glowAnimation,
-                    builder: (context, child) {
-                      return Container(
-                        padding: const EdgeInsets.all(28),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.85),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: Constants.primary.withOpacity(0.8),
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Constants.accent
-                                  .withOpacity(_glowAnimation.value * 0.5),
-                              blurRadius: 20,
-                              spreadRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '🤝 REAL TIME CHAT 🤝',
-                              style: TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.bold,
-                                color: Constants.primary,
-                                shadows: [
-                                  Shadow(
-                                    color: Constants.accent
-                                        .withOpacity(_glowAnimation.value),
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 0),
-                                  ),
-                                  Shadow(
-                                    color: Colors.amber.withOpacity(0.6),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 0),
-                                  ),
-                                ],
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 36),
+  // ---------------------- BACKGROUND ----------------------
+  Widget _background() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFF000F1C),
+            Color(0xFF051A2C),
+            Color(0xFF000A12),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+    );
+  }
 
-                            // Username
-                            TextField(
-                              controller: usernameController,
-                              style: const TextStyle(color: Colors.white),
-                              autofillHints: const [AutofillHints.username],
-                              decoration: neonInputDecoration('Username'),
-                            ),
-                            const SizedBox(height: 20),
-
-                            // Nickname
-                            TextField(
-                              controller: nicknameController,
-                              style: const TextStyle(color: Colors.white),
-                              autofillHints: const [AutofillHints.name],
-                              decoration: neonInputDecoration('Nickname'),
-                            ),
-                            const SizedBox(height: 20),
-
-                            // Password
-                            TextField(
-                              controller: passwordController,
-                              obscureText: !passwordVisible,
-                              style: const TextStyle(color: Colors.white),
-                              autofillHints: const [AutofillHints.password],
-                              decoration: neonInputDecoration('Password').copyWith(
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    passwordVisible
-                                        ? Icons.visibility
-                                        : Icons.visibility_off,
-                                    color: Constants.primary,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      passwordVisible = !passwordVisible;
-                                    });
-                                  },
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 28),
-
-                            // Register button with glow
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: loading ? null : register,
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 18),
-                                  backgroundColor: Constants.accent,
-                                  foregroundColor: Colors.black,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  shadowColor: Constants.accent,
-                                  elevation: 12,
-                                ),
-                                child: loading
-                                    ? const CircularProgressIndicator(
-                                        color: Colors.black)
-                                    : const Text(
-                                        'REGISTER',
-                                        style: TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Login redirect
-                            TextButton(
-                              onPressed: () {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) => const LoginScreen()),
-                                );
-                              },
-                              child: Text(
-                                'Already have an account? Login',
-                                style: TextStyle(
-                                  color: Constants.primary,
-                                  fontWeight: FontWeight.w500,
-                                  shadows: [
-                                    Shadow(
-                                      color: Constants.accent.withOpacity(0.5),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 0),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
+  // ---------------------- FORM CARD ----------------------
+  Widget _formCard() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
+      child: AnimatedBuilder(
+        animation: glow,
+        builder: (_, __) {
+          return Container(
+            width: 420,
+            padding: const EdgeInsets.all(30),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.70),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: Constants.primary.withOpacity(glow.value),
+                width: 1.8,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Constants.accent.withOpacity(glow.value * 0.6),
+                  blurRadius: 25,
+                  spreadRadius: 3,
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                _title(),
+                const SizedBox(height: 35),
+                _input(usernameCtrl, "Username", AutofillHints.username),
+                const SizedBox(height: 18),
+                _input(nicknameCtrl, "Nickname", AutofillHints.name),
+                const SizedBox(height: 18),
+                _passwordField(),
+                const SizedBox(height: 30),
+                _registerButton(),
+                const SizedBox(height: 14),
+                _loginLink(),
+              ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  // ---------------------- TITLE ----------------------
+  Widget _title() {
+    return Column(
+      children: [
+        Text(
+          "CREATE ACCOUNT",
+          style: TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.bold,
+            color: Constants.primary,
+            shadows: [
+              Shadow(
+                  color: Constants.accent.withOpacity(0.6),
+                  blurRadius: 25),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          "Join real-time chat ✨",
+          style: TextStyle(color: Colors.white60, fontSize: 14),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------- INPUT FIELD ----------------------
+  Widget _input(TextEditingController ctrl, String label, String autofill) {
+    return TextField(
+      controller: ctrl,
+      style: const TextStyle(color: Colors.white),
+      autofillHints: [autofill],
+      decoration: neonInputDecoration(label),
+    );
+  }
+
+  // ---------------------- PASSWORD FIELD ----------------------
+  Widget _passwordField() {
+    return TextField(
+      controller: passwordCtrl,
+      obscureText: !showPassword,
+      style: const TextStyle(color: Colors.white),
+      autofillHints: const [AutofillHints.password],
+      decoration: neonInputDecoration("Password").copyWith(
+        suffixIcon: IconButton(
+          icon: Icon(
+            showPassword ? Icons.visibility : Icons.visibility_off,
+            color: Constants.primary,
+          ),
+          onPressed: () => setState(() => showPassword = !showPassword),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------- REGISTER BUTTON ----------------------
+  Widget _registerButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: loading ? null : register,
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          backgroundColor: Constants.accent,
+          foregroundColor: Colors.black,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          elevation: 12,
+          shadowColor: Constants.accent,
+        ),
+        child: const Text(
+          "REGISTER",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------- LOGIN LINK ----------------------
+  Widget _loginLink() {
+    return TextButton(
+      onPressed: () => Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      ),
+      child: Text(
+        "Already have an account? Login",
+        style: TextStyle(
+          color: Constants.primary,
+          fontSize: 14,
+          shadows: [
+            Shadow(
+                color: Constants.primary.withOpacity(0.5),
+                blurRadius: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------------------- LOADING OVERLAY ----------------------
+  Widget _loadingOverlay() {
+    return Container(
+      color: Colors.black.withOpacity(0.6),
+      child: const Center(
+        child: CircularProgressIndicator(color: Colors.blueAccent),
       ),
     );
   }

@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:html' as html;
+import 'dart:html' as html; // Only used on Web
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+
 import '../models/message.dart';
 
 typedef MessageCallback = void Function(Message message);
@@ -18,215 +19,186 @@ class SocketService {
 
   // Callbacks
   MessageCallback? onMessage;
-  TypingCallback? onTyping;
-  OnlineUsersCallback? onOnlineUsers;
   MessageCallback? onMessageEdited;
   MessageCallback? onMessageDeleted;
   MessageCallback? onMessageDelivered;
   MessageCallback? onMessageSeen;
+
+  TypingCallback? onTyping;
+  OnlineUsersCallback? onOnlineUsers;
+
   GenericCallback? onReactionUpdated;
   GenericCallback? onRoomList;
   GenericCallback? onLastSeenUpdated;
 
-  // -------------------------
+  // ----------------------------------------------------------------------
   // CONNECT
-  // -------------------------
+  // ----------------------------------------------------------------------
   void connect(
     String token, {
-    String url = 'https://chat-backend-mnz7.onrender.com',
+    String url = "https://chat-backend-mnz7.onrender.com",
     void Function()? onConnect,
     void Function()? onDisconnect,
-    void Function(dynamic)? onError,
   }) {
     if (_socket != null && _socket!.connected) return;
 
     _socket = IO.io(
       url,
       IO.OptionBuilder()
-          .setTransports(['websocket'])
-          .enableForceNew()
+          .setTransports(["websocket"])
           .enableReconnection()
+          .setReconnectionAttempts(40)
           .setReconnectionDelay(500)
-          .setReconnectionAttempts(50)
-          .setAuth({'token': token})
+          .enableForceNew()
+          .setAuth({"token": token})
           .build(),
     );
 
     _socket!
       ..onConnect((_) {
-        print("🔥 SOCKET CONNECTED: ${_socket!.id}");
+        print("🟢 Connected: ${_socket!.id}");
         _initializeListeners();
         onConnect?.call();
       })
       ..onDisconnect((_) {
-        print("⚠️ SOCKET DISCONNECTED");
+        print("🔴 Disconnected");
         onDisconnect?.call();
       })
-      ..onError((e) {
-        print("❌ SOCKET ERROR: $e");
-        onError?.call(e);
-      })
-      ..onConnectError((e) {
-        print("❌ CONNECT ERROR: $e");
-      });
+      ..onConnectError((e) => print("❌ Connect error: $e"))
+      ..onError((e) => print("❌ Socket error: $e"));
   }
 
-  // -------------------------
-  // LISTENERS
-  // -------------------------
+  // ----------------------------------------------------------------------
+  // INTERNAL LISTENERS
+  // ----------------------------------------------------------------------
   void _initializeListeners() {
-    void safeMap(dynamic data, Function(Map<String, dynamic>) callback) {
-      if (data == null) return;
-
-      if (data is String) {
-        try {
-          callback(jsonDecode(data) as Map<String, dynamic>);
-        } catch (_) {
-          print("Invalid JSON: $data");
+    void parse(dynamic data, void Function(Map<String, dynamic>) handler) {
+      try {
+        if (data is Map) {
+          handler(Map<String, dynamic>.from(data));
+        } else if (data is String) {
+          handler(jsonDecode(data));
         }
-      } else if (data is Map) {
-        callback(data.map((k, v) => MapEntry(k.toString(), v)));
-      } else {
-        print("Unknown data format: $data");
+      } catch (e) {
+        print("❌ Invalid socket data format: $e\nData: $data");
       }
     }
 
-    // -------------------------
+    // -------------------------------
     // RECEIVE MESSAGE
-    // -------------------------
-    _socket!..off("receiveMessage");
-    _socket!.on("receiveMessage", (data) {
-      safeMap(data, (map) {
-        try {
-          onMessage?.call(Message.fromJson(Map<String, dynamic>.from(map)));
-        } catch (e) {
-          print("receiveMessage parse error: $e");
-        }
-      });
+    // -------------------------------
+    _listen("receiveMessage", (m) {
+      try {
+        final msg = Message.fromJson(m);
+        onMessage?.call(msg);
+      } catch (e) {
+        print("❌ Message parse failed: $e");
+      }
     });
 
-    // -------------------------
+    // -------------------------------
     // TYPING
-    // -------------------------
-    _socket!..off("typing");
-    _socket!.on("typing", (data) {
-      safeMap(data, (map) {
-        onTyping?.call(
-          map['userId']?.toString() ?? '',
-          map['isTyping'] == true,
-          map['username']?.toString(),
-        );
-      });
+    // -------------------------------
+    _listen("typing", (m) {
+      onTyping?.call(
+        m["userId"]?.toString() ?? "",
+        m["isTyping"] == true,
+        m["username"],
+      );
     });
 
-    // -------------------------
+    // -------------------------------
     // ONLINE USERS
-    // -------------------------
-    _socket!..off("onlineUsers");
-    _socket!.on("onlineUsers", (data) {
-      safeMap(data, (map) {
-        final count = (map['count'] is int)
-            ? map['count'] as int
-            : int.tryParse(map['count']?.toString() ?? '0') ?? 0;
-        final users = Map<String, dynamic>.from(map['users'] ?? {});
-        onOnlineUsers?.call(count, users);
-      });
+    // -------------------------------
+    _listen("onlineUsers", (m) {
+      final count = int.tryParse(m["count"].toString()) ?? 0;
+      final map = Map<String, dynamic>.from(m["users"] ?? {});
+      onOnlineUsers?.call(count, map);
     });
 
-    // -------------------------
-    // MESSAGE UPDATES
-    // -------------------------
-    void messageUpdateListener(String event, MessageCallback? callback) {
-      _socket!..off(event);
-      _socket!.on(event, (data) {
-        safeMap(data, (map) {
-          try {
-            callback?.call(Message.fromJson(Map<String, dynamic>.from(map)));
-          } catch (e) {
-            print("$event parse error (expected full message): $e");
-          }
-        });
-      });
-    }
-
-    messageUpdateListener("messageEdited", onMessageEdited);
-    messageUpdateListener("messageDeleted", onMessageDeleted);
-
-    // -------------------------
-    // MESSAGE DELIVERED / SEEN
-    // -------------------------
-    _socket!..off("messageDelivered");
-    _socket!.on("messageDelivered", (data) {
-      safeMap(data, (map) {
-        final mid = (map['messageId'] ?? map['_id'] ?? '').toString();
-        final delivered = (map['deliveredTo'] is List)
-            ? List<String>.from((map['deliveredTo'] as List).map((e) => e.toString()))
-            : <String>[];
-
-        final m = Message(
-          id: mid,
-          senderId: '',
-          senderName: '',
-          roomId: map['roomId']?.toString() ?? '',
-          content: '',
-          type: 'text',
-          timestamp: DateTime.now(),
-          isDelivered: delivered.isNotEmpty,
-          isSeen: false,
-          reactions: {},
-          replyToMessageId: null,
-          deliveredTo: delivered,
-          seenBy: [],
-        );
-
-        onMessageDelivered?.call(m);
-      });
+    // -------------------------------
+    // MESSAGE EDIT
+    // -------------------------------
+    _listen("messageEdited", (m) {
+      onMessageEdited?.call(Message.fromJson(m));
     });
 
-    _socket!..off("messageSeen");
-    _socket!.on("messageSeen", (data) {
-      safeMap(data, (map) {
-        final mid = (map['messageId'] ?? map['_id'] ?? '').toString();
-        final seen = (map['seenBy'] is List)
-            ? List<String>.from((map['seenBy'] as List).map((e) => e.toString()))
-            : <String>[];
-
-        final m = Message(
-          id: mid,
-          senderId: '',
-          senderName: '',
-          roomId: map['roomId']?.toString() ?? '',
-          content: '',
-          type: 'text',
-          timestamp: DateTime.now(),
-          isDelivered: true,
-          isSeen: seen.isNotEmpty,
-          reactions: {},
-          replyToMessageId: null,
-          deliveredTo: [],
-          seenBy: seen,
-        );
-
-        onMessageSeen?.call(m);
-      });
+    // -------------------------------
+    // MESSAGE DELETE
+    // -------------------------------
+    _listen("messageDeleted", (m) {
+      onMessageDeleted?.call(Message.fromJson(m));
     });
 
-    // -------------------------
+    // -------------------------------
+    // MESSAGE DELIVERED
+    // -------------------------------
+    _listen("messageDelivered", (m) {
+      final updated = Message(
+        id: m["messageId"] ?? m["_id"] ?? "",
+        senderId: "",
+        senderName: "",
+        roomId: m["roomId"] ?? "",
+        content: "",
+        type: "text",
+        timestamp: DateTime.now(),
+        isDelivered: true,
+        isSeen: false,
+        deliveredTo: List<String>.from(m["deliveredTo"] ?? []),
+        reactions: {},
+      );
+      onMessageDelivered?.call(updated);
+    });
+
+    // -------------------------------
+    // MESSAGE SEEN
+    // -------------------------------
+    _listen("messageSeen", (m) {
+      final updated = Message(
+        id: m["messageId"] ?? m["_id"] ?? "",
+        senderId: "",
+        senderName: "",
+        roomId: m["roomId"] ?? "",
+        content: "",
+        type: "text",
+        timestamp: DateTime.now(),
+        isDelivered: true,
+        isSeen: true,
+        seenBy: List<String>.from(m["seenBy"] ?? []),
+        reactions: {},
+      );
+      onMessageSeen?.call(updated);
+    });
+
+    // -------------------------------
     // OTHER EVENTS
-    // -------------------------
-    _socket!..off("reactionUpdated");
-    _socket!.on("reactionUpdated", (d) => onReactionUpdated?.call(d));
-
-    _socket!..off("roomsList");
-    _socket!.on("roomsList", (d) => onRoomList?.call(d));
-
-    _socket!..off("lastSeen");
-    _socket!.on("lastSeen", (d) => onLastSeenUpdated?.call(d));
+    // -------------------------------
+    _listen("reactionUpdated", (m) => onReactionUpdated?.call(m));
+    _listen("roomsList", (m) => onRoomList?.call(m));
+    _listen("lastSeen", (m) => onLastSeenUpdated?.call(m));
   }
 
-  // -------------------------
-  // MESSAGES
-  // -------------------------
+  // Helper : attach listener with automatic cleanup
+  void _listen(String event, Function(Map<String, dynamic>) handler) {
+    _socket!..off(event);
+    _socket!.on(event, (d) => _safeCallback(d, handler));
+  }
+
+  void _safeCallback(dynamic raw, Function(Map<String, dynamic>) handler) {
+    try {
+      if (raw is Map) {
+        handler(Map<String, dynamic>.from(raw));
+      } else if (raw is String) {
+        handler(jsonDecode(raw));
+      }
+    } catch (_) {
+      print("⚠️ Failed to decode event: $raw");
+    }
+  }
+
+  // ----------------------------------------------------------------------
+  // MESSAGE & FILE SENDING
+  // ----------------------------------------------------------------------
   void sendMessage(
     String content, {
     required String roomId,
@@ -237,79 +209,35 @@ class SocketService {
     if (!isConnected) return;
     _socket!.emit("sendMessage", {
       "content": content,
-      "roomId": roomId,
-      "senderName": senderName,
-      "tempId": tempId,
-      "replyTo": replyTo,
       "type": "text",
+      "roomId": roomId,
+      "tempId": tempId,
+      "senderName": senderName,
+      "replyTo": replyTo,
     });
   }
 
-  void editMessage(String messageId, String newText) {
+  void editMessage(String id, String newText) {
     if (!isConnected) return;
-    _socket!.emit("editMessage", {"messageId": messageId, "content": newText});
+    _socket!.emit("editMessage", {"messageId": id, "content": newText});
   }
 
-  void deleteMessage(String messageId, {bool forEveryone = false}) {
+  void deleteMessage(String id, {bool forEveryone = false}) {
     if (!isConnected) return;
-    _socket!.emit("deleteMessage", {"messageId": messageId, "forEveryone": forEveryone});
-  }
-
-  void addReaction(String messageId, String emoji) {
-    if (!isConnected) return;
-    _socket!.emit("addReaction", {"messageId": messageId, "emoji": emoji});
-  }
-
-  // -------------------------
-  // SEND FILES (Web)
-  // -------------------------
-  void sendImageFile(
-    html.File file, {
-    required String roomId,
-    required String senderName,
-    String? tempId,
-    String? replyTo,
-  }) {
-    if (!isConnected) return;
-    final reader = html.FileReader();
-    reader.readAsDataUrl(file);
-    reader.onLoadEnd.listen((_) {
-      _socket!.emit("sendMessage", {
-        "content": reader.result,
-        "roomId": roomId,
-        "senderName": senderName,
-        "tempId": tempId,
-        "type": "image",
-        "fileName": file.name,
-        "replyTo": replyTo,
-      });
+    _socket!.emit("deleteMessage", {
+      "messageId": id,
+      "forEveryone": forEveryone,
     });
   }
 
-  void sendFileWeb(
-    html.File file, {
-    required String roomId,
-    required String senderName,
-    String? tempId,
-    String? replyTo,
-  }) {
+  void addReaction(String id, String emoji) {
     if (!isConnected) return;
-    final reader = html.FileReader();
-    reader.readAsArrayBuffer(file);
-    reader.onLoadEnd.listen((_) {
-      final bytes = reader.result as Uint8List;
-      _socket!.emit("sendMessage", {
-        "content": base64Encode(bytes),
-        "roomId": roomId,
-        "senderName": senderName,
-        "tempId": tempId,
-        "type": "file",
-        "fileName": file.name,
-        "replyTo": replyTo,
-      });
-    });
+    _socket!.emit("addReaction", {"messageId": id, "emoji": emoji});
   }
 
+  // ----------------------------------------------------------------------
+  // FILE SENDING (Mobile + Web)
+  // ----------------------------------------------------------------------
   void sendFile(
     String fileUrl,
     String fileName, {
@@ -321,32 +249,38 @@ class SocketService {
     if (!isConnected) return;
     _socket!.emit("sendMessage", {
       "content": fileUrl,
-      "fileUrl": fileUrl,
       "fileName": fileName,
-      "roomId": roomId,
-      "senderName": senderName,
-      "tempId": tempId,
+      "fileUrl": fileUrl,
       "type": "file",
+      "roomId": roomId,
+      "tempId": tempId,
+      "senderName": senderName,
       "replyTo": replyTo,
     });
   }
 
-  // -------------------------
-  // BROADCAST
-  // -------------------------
-  void broadcastMessage(String content, {required String senderName}) {
-    if (!isConnected) return;
-    _socket!.emit("broadcastMessage", {"content": content, "senderName": senderName});
+  void sendImageWeb(html.File file,
+      {required String roomId, required String senderName}) {
+    final reader = html.FileReader();
+    reader.readAsDataUrl(file);
+    reader.onLoadEnd.listen((_) {
+      _socket!.emit("sendMessage", {
+        "type": "image",
+        "content": reader.result,
+        "fileName": file.name,
+        "roomId": roomId,
+        "senderName": senderName,
+      });
+    });
   }
 
-  void sendTyping(String roomId, String userId, String username, bool isTyping) {
+  // ----------------------------------------------------------------------
+  // ROOM / TYPING EVENTS
+  // ----------------------------------------------------------------------
+  void sendTyping(String room, String userId, String username, bool state) {
     if (!isConnected) return;
-    _socket!.emit("typing", {
-      "roomId": roomId,
-      "userId": userId,
-      "username": username,
-      "isTyping": isTyping,
-    });
+    _socket!.emit("typing",
+        {"roomId": room, "userId": userId, "username": username, "isTyping": state});
   }
 
   void joinRoom(String roomId) {
@@ -364,23 +298,27 @@ class SocketService {
     _socket!.emit("getRooms");
   }
 
+  // ----------------------------------------------------------------------
+  // DISCONNECT CLEANLY
+  // ----------------------------------------------------------------------
   void disconnect() {
     if (_socket == null) return;
     _socket!
       ..off("receiveMessage")
       ..off("typing")
       ..off("onlineUsers")
-      ..off("roomsList")
-      ..off("messageSeen")
-      ..off("messageDelivered")
       ..off("messageEdited")
       ..off("messageDeleted")
+      ..off("messageDelivered")
+      ..off("messageSeen")
       ..off("reactionUpdated")
+      ..off("roomsList")
       ..off("lastSeen")
       ..disconnect()
       ..dispose();
+
     _socket = null;
-    print("🔌 SOCKET CLEANLY DISCONNECTED");
+    print("🔌 Socket disconnected cleanly");
   }
 
   bool get isConnected => _socket?.connected ?? false;

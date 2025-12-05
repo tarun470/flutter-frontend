@@ -1,9 +1,7 @@
-// lib/models/message.dart
-
 class Message {
   final String id;
   final String senderId;
-  final String senderName; // nickname display
+  final String senderName;
   final String roomId;
   final String content;
   final String type; // text | image | file | reply
@@ -16,10 +14,9 @@ class Message {
   String? replyToMessageId;
   Map<String, int>? reactions;
 
-  List<String>? deliveredTo;
-  List<String>? seenBy;
+  List<String> deliveredTo;
+  List<String> seenBy;
 
-  // NEW FIELD - required for fixing your build error
   final String? fileName;
 
   Message({
@@ -35,19 +32,27 @@ class Message {
     this.isEdited = false,
     this.replyToMessageId,
     this.reactions,
-    this.deliveredTo,
-    this.seenBy,
+    List<String>? deliveredTo,
+    List<String>? seenBy,
     this.fileName,
-  });
+  })  : deliveredTo = deliveredTo ?? [],
+        seenBy = seenBy ?? [];
 
-  // ---------------------------------------------
-  // SAFE PARSERS
-  // ---------------------------------------------
+  // ------------------------------
+  // PARSERS
+  // ------------------------------
+
   static String _parseId(dynamic field) {
     if (field == null) return '';
     if (field is String) return field;
-    if (field is Map && field.containsKey('\$oid')) return field['\$oid'];
-    return '';
+
+    // MongoDB {"$oid": "..."}
+    if (field is Map && field.containsKey('\$oid')) {
+      return field['\$oid'];
+    }
+
+    // Node may send object → convert to string safely
+    return field.toString();
   }
 
   static DateTime _parseDate(dynamic field) {
@@ -56,6 +61,7 @@ class Message {
 
       if (field is String) return DateTime.parse(field);
 
+      // MongoDB {"$date": {"$numberLong": "1234"}}
       if (field is Map) {
         final date = field['\$date'];
 
@@ -68,25 +74,25 @@ class Message {
         if (date is String) return DateTime.parse(date);
       }
     } catch (_) {}
+
     return DateTime.now();
   }
 
-  // ---------------------------------------------
+  // ------------------------------
   // FROM JSON
-  // ---------------------------------------------
-  factory Message.fromJson(Map<String, dynamic> json) {
-    final delivered = json['deliveredTo'];
-    final seen = json['seenBy'];
+  // ------------------------------
 
+  factory Message.fromJson(Map<String, dynamic> json) {
     return Message(
       id: _parseId(json['_id'] ?? json['id']),
       senderId: _parseId(json['sender'] ?? json['senderId'] ?? json['from']),
       senderName: json['senderName'] ??
-          (json['sender'] is Map ? (json['sender']['username'] ?? '') : ''),
+          (json['sender'] is Map ? json['sender']['username'] ?? '' : ''),
 
       roomId: json['room'] ?? json['roomId'] ?? 'global',
       content: json['content'] ?? '',
       type: json['type'] ?? 'text',
+
       timestamp: _parseDate(json['timestamp'] ?? json['createdAt']),
 
       isDelivered: json['isDelivered'] ?? json['status'] == 'delivered',
@@ -99,38 +105,39 @@ class Message {
           ? Map<String, int>.from(json['reactions'])
           : {},
 
-      // FIX: Convert List<dynamic> → List<String>
-      deliveredTo: delivered != null
-          ? List<String>.from(delivered.map((e) => e.toString()))
+      deliveredTo: json['deliveredTo'] != null
+          ? List<String>.from(json['deliveredTo'].map((e) => e.toString()))
           : [],
 
-      seenBy: seen != null
-          ? List<String>.from(seen.map((e) => e.toString()))
+      seenBy: json['seenBy'] != null
+          ? List<String>.from(json['seenBy'].map((e) => e.toString()))
           : [],
 
-      // FIX: Add fileName support
       fileName: json['fileName'],
     );
   }
 
-  // ---------------------------------------------
+  // ------------------------------
   // TO JSON
-  // ---------------------------------------------
-  Map<String, dynamic> toJson() => {
-        '_id': id,
-        'senderId': senderId,
-        'senderName': senderName,
-        'roomId': roomId,
-        'content': content,
-        'type': type,
-        'timestamp': timestamp.toUtc().toIso8601String(),
-        'isDelivered': isDelivered,
-        'isSeen': isSeen,
-        'isEdited': isEdited,
-        'replyTo': replyToMessageId,
-        'reactions': reactions,
-        'deliveredTo': deliveredTo,
-        'seenBy': seenBy,
-        'fileName': fileName, // Added
-      };
+  // ------------------------------
+
+  Map<String, dynamic> toJson() {
+    return {
+      '_id': id,
+      'senderId': senderId,
+      'senderName': senderName,
+      'roomId': roomId,
+      'content': content,
+      'type': type,
+      'timestamp': timestamp.toIso8601String(),
+      'isDelivered': isDelivered,
+      'isSeen': isSeen,
+      'isEdited': isEdited,
+      'replyTo': replyToMessageId,
+      'reactions': reactions,
+      'deliveredTo': deliveredTo,
+      'seenBy': seenBy,
+      'fileName': fileName,
+    };
+  }
 }
