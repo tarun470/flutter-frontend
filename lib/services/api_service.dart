@@ -5,9 +5,9 @@ import 'package:http/http.dart' as http;
 import '../utils/secure_storage.dart';
 import '../utils/constants.dart';
 
-/// ===============================================
-/// USER MODEL (Updated for new backend format)
-/// ===============================================
+/// ===============================================================
+/// USER MODEL  — Matches NEW backend exactly
+/// ===============================================================
 class UserModel {
   final String id;
   final String username;
@@ -19,26 +19,28 @@ class UserModel {
     required this.nickname,
   });
 
+  // Used for LOGIN response
   factory UserModel.fromLogin(Map<String, dynamic> json) {
     return UserModel(
-      id: json["userId"] ?? "",
-      username: json["username"] ?? "",
-      nickname: json["nickname"] ?? json["username"] ?? "",
+      id: json["user"]["id"] ?? json["user"]["_id"] ?? "",
+      username: json["user"]["username"] ?? "",
+      nickname: json["user"]["nickname"] ?? json["user"]["username"] ?? "",
     );
   }
 
+  // Used for REGISTER response
   factory UserModel.fromRegister(Map<String, dynamic> json) {
     return UserModel(
-      id: json["id"] ?? "",
+      id: json["id"] ?? json["_id"] ?? "",
       username: json["username"] ?? "",
       nickname: json["nickname"] ?? "",
     );
   }
 }
 
-/// ===============================================
+/// ===============================================================
 /// MESSAGE MODEL
-/// ===============================================
+/// ===============================================================
 class MessageModel {
   final String id;
   final String content;
@@ -71,9 +73,9 @@ class MessageModel {
   }
 }
 
-/// ===============================================
-/// API SERVICE — Login, Register, Messages, Upload
-/// ===============================================
+/// ===============================================================
+/// API SERVICE — Login, Register, Messages, File Upload
+/// ===============================================================
 class ApiService {
   static final SecureStorageService _storage = SecureStorageService();
 
@@ -85,9 +87,9 @@ class ApiService {
     };
   }
 
-  // ============================================================
-  // LOGIN (FULLY FIXED FOR NEW BACKEND)
-  // ============================================================
+  // ======================================================================
+  // LOGIN — Matches backend: { message, token, user: { id, username, ... } }
+  // ======================================================================
   static Future<Map<String, dynamic>?> loginUser(
       String username, String password) async {
     final url = Uri.parse("${Constants.apiUrl}/auth/login");
@@ -114,7 +116,7 @@ class ApiService {
 
       final user = UserModel.fromLogin(data);
 
-      // Save securely
+      // Save to secure storage
       await _storage.saveToken(token);
       await _storage.saveUserId(user.id);
       await _storage.saveUsername(user.username);
@@ -129,9 +131,9 @@ class ApiService {
     }
   }
 
-  // ============================================================
-  // REGISTER (UPDATED)
-  // ============================================================
+  // ======================================================================
+  // REGISTER — Matches backend: { message, user: { id, username, nickname } }
+  // ======================================================================
   static Future<Map<String, dynamic>?> register(
     String username,
     String password,
@@ -156,11 +158,12 @@ class ApiService {
       if (res.statusCode != 201) return null;
 
       final body = jsonDecode(res.body);
+
       final user = UserModel.fromRegister(body["user"]);
 
       return {
         "user": user,
-        "message": body["message"] ?? "Registered successfully",
+        "message": body["message"] ?? "Registration successful",
       };
     } catch (e) {
       print("❌ REGISTER ERROR: $e");
@@ -168,16 +171,15 @@ class ApiService {
     }
   }
 
-  // ============================================================
+  // ======================================================================
   // FETCH MESSAGES
-  // ============================================================
+  // ======================================================================
   static Future<List<MessageModel>> fetchMessages(
       String roomId, String token) async {
     final url = Uri.parse("${Constants.apiUrl}/messages?room=$roomId");
 
     try {
-      final res =
-          await http.get(url, headers: _headers(token: token));
+      final res = await http.get(url, headers: _headers(token: token));
 
       if (res.statusCode == 200) {
         final list = jsonDecode(res.body) as List;
@@ -190,9 +192,9 @@ class ApiService {
     }
   }
 
-  // ============================================================
+  // ======================================================================
   // FILE UPLOAD
-  // ============================================================
+  // ======================================================================
   static Future<MessageModel?> uploadFile(
     String path,
     String fieldName, {
@@ -203,15 +205,15 @@ class ApiService {
 
     final req = http.MultipartRequest("POST", url);
 
-    if (token != null) {
-      req.headers["Authorization"] = "Bearer $token";
-    }
+    if (token != null) req.headers["Authorization"] = "Bearer $token";
 
-    req.files.add(await http.MultipartFile.fromPath(
-      fieldName,
-      path,
-      filename: filename,
-    ));
+    req.files.add(
+      await http.MultipartFile.fromPath(
+        fieldName,
+        path,
+        filename: filename,
+      ),
+    );
 
     try {
       final streamed = await req.send();
@@ -231,7 +233,7 @@ class ApiService {
         );
       }
 
-      print("❌ UPLOAD FAILED: ${res.body}");
+      print("❌ FILE UPLOAD FAILED: ${res.body}");
       return null;
     } catch (e) {
       print("❌ FILE UPLOAD ERROR: $e");
@@ -239,9 +241,9 @@ class ApiService {
     }
   }
 
-  // ============================================================
-  // TOKEN HELPERS
-  // ============================================================
+  // ======================================================================
+  // TOKEN SHORTCUTS
+  // ======================================================================
   static Future<String?> getToken() => _storage.getToken();
   static Future<String?> getUserId() => _storage.getUserId();
   static Future<void> logout() => _storage.clearAll();

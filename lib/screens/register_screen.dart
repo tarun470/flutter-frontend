@@ -46,14 +46,21 @@ class _RegisterScreenState extends State<RegisterScreen>
     super.dispose();
   }
 
-  // ---------------------- REGISTER LOGIC ----------------------
+  // -------------------------------------------------------
+  // REGISTER LOGIC (FIXED)
+  // -------------------------------------------------------
   Future<void> register() async {
-    final username = usernameCtrl.text.trim();
+    final username = usernameCtrl.text.trim().toLowerCase();
     final nick = nicknameCtrl.text.trim();
     final pass = passwordCtrl.text.trim();
 
     if (username.isEmpty || nick.isEmpty || pass.isEmpty) {
-      _error("Please fill all the fields.");
+      _error("Please fill all fields.");
+      return;
+    }
+
+    if (pass.length < 6) {
+      _error("Password must be at least 6 characters.");
       return;
     }
 
@@ -64,11 +71,15 @@ class _RegisterScreenState extends State<RegisterScreen>
     setState(() => loading = false);
 
     if (res != null) {
+      final registeredUser = res['user'];
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(
-                "🎉 Registered successfully! Please login, ${res['username']}"),
-            backgroundColor: Colors.green),
+          content: Text(
+            "🎉 Account created for ${registeredUser.username}! Please log in.",
+          ),
+          backgroundColor: Colors.green,
+        ),
       );
 
       Navigator.pushReplacement(
@@ -76,7 +87,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
     } else {
-      _error("Registration failed. Username may be taken.");
+      _error("Registration failed. Username might already exist.");
     }
   }
 
@@ -86,7 +97,9 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  // ---------------------- UI ----------------------
+  // -------------------------------------------------------
+  // UI
+  // -------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -176,8 +189,9 @@ class _RegisterScreenState extends State<RegisterScreen>
             color: Constants.primary,
             shadows: [
               Shadow(
-                  color: Constants.accent.withOpacity(0.6),
-                  blurRadius: 25),
+                color: Constants.accent.withOpacity(0.6),
+                blurRadius: 25,
+              ),
             ],
           ),
         ),
@@ -233,7 +247,6 @@ class _RegisterScreenState extends State<RegisterScreen>
             borderRadius: BorderRadius.circular(14),
           ),
           elevation: 12,
-          shadowColor: Constants.accent,
         ),
         child: const Text(
           "REGISTER",
@@ -257,8 +270,9 @@ class _RegisterScreenState extends State<RegisterScreen>
           fontSize: 14,
           shadows: [
             Shadow(
-                color: Constants.primary.withOpacity(0.5),
-                blurRadius: 10),
+              color: Constants.primary.withOpacity(0.5),
+              blurRadius: 10,
+            ),
           ],
         ),
       ),

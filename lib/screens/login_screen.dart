@@ -19,7 +19,9 @@ class _LoginScreenState extends State<LoginScreen> {
   bool loading = false;
   bool showPassword = false;
 
-  // ---------------------- LOGIN LOGIC ----------------------
+  // --------------------------------------------------------
+  // LOGIN LOGIC
+  // --------------------------------------------------------
   Future<void> login() async {
     final username = usernameCtrl.text.trim().toLowerCase();
     final password = passwordCtrl.text.trim();
@@ -41,7 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final token = res["token"];
-    final user = res["user"];
+    final user = res["user"]; // <-- This is a UserModel object
 
     if (token == null || user == null) {
       _showError("Unexpected server error");
@@ -50,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     await storage.saveToken(token);
     await storage.saveUserId(user.id);
-    await storage.saveUsername(user.nickname);
+    await storage.saveUsername(user.nickname ?? user.username);
 
     Navigator.pushReplacement(
       context,
@@ -58,7 +60,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ---------------------- ERROR POPUP ----------------------
+  // --------------------------------------------------------
+  // ERROR SNACKBAR
+  // --------------------------------------------------------
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -68,7 +72,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ----------------------------------------------------------
+  // --------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -82,14 +86,15 @@ class _LoginScreenState extends State<LoginScreen> {
               child: _buildGlassLoginCard(),
             ),
           ),
-
           if (loading) _buildLoadingOverlay(),
         ],
       ),
     );
   }
 
-  // ---------------------- BACKGROUND ----------------------
+  // --------------------------------------------------------
+  // BACKGROUND GRADIENT
+  // --------------------------------------------------------
   Widget _buildBackground() {
     return Container(
       decoration: const BoxDecoration(
@@ -105,18 +110,20 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ---------------------- GLASS CARD ----------------------
+  // --------------------------------------------------------
+  // GLASS EFFECT CARD
+  // --------------------------------------------------------
   Widget _buildGlassLoginCard() {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 500),
-      padding: const EdgeInsets.all(26),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.08),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: Colors.blueAccent.withOpacity(0.4)),
         boxShadow: [
           BoxShadow(
-            color: Colors.blueAccent.withOpacity(0.3),
+            color: Colors.blueAccent.withOpacity(0.25),
             blurRadius: 28,
           ),
         ],
@@ -125,11 +132,11 @@ class _LoginScreenState extends State<LoginScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           _buildTitle(),
-          const SizedBox(height: 28),
+          const SizedBox(height: 30),
           _buildInput(usernameCtrl, "Username", Icons.person),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           _buildPasswordInput(),
-          const SizedBox(height: 26),
+          const SizedBox(height: 28),
           _buildLoginButton(),
           const SizedBox(height: 14),
           _buildRegisterLink(),
@@ -138,25 +145,27 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ---------------------- TITLE ----------------------
+  // --------------------------------------------------------
+  // TITLE
+  // --------------------------------------------------------
   Widget _buildTitle() {
     return Column(
       children: [
         Text(
           "REAL TIME CHAT",
           style: TextStyle(
-            fontSize: 30,
+            fontSize: 28,
             fontWeight: FontWeight.bold,
             color: Colors.blueAccent.shade100,
             shadows: [
               Shadow(
-                color: Colors.blueAccent.withOpacity(0.8),
+                color: Colors.blueAccent.withOpacity(0.9),
                 blurRadius: 28,
               ),
             ],
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         const Text(
           "Welcome back 👋",
           style: TextStyle(color: Colors.white70, fontSize: 15),
@@ -165,7 +174,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ---------------------- TEXT INPUT ----------------------
+  // --------------------------------------------------------
+  // TEXT INPUT
+  // --------------------------------------------------------
   Widget _buildInput(
       TextEditingController ctrl, String hint, IconData icon) {
     return TextField(
@@ -185,7 +196,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ---------------------- PASSWORD INPUT WITH TOGGLE ----------------------
+  // --------------------------------------------------------
+  // PASSWORD INPUT WITH EYE TOGGLE
+  // --------------------------------------------------------
   Widget _buildPasswordInput() {
     return TextField(
       controller: passwordCtrl,
@@ -212,7 +225,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ---------------------- LOGIN BUTTON ----------------------
+  // --------------------------------------------------------
+  // LOGIN BUTTON
+  // --------------------------------------------------------
   Widget _buildLoginButton() {
     return SizedBox(
       width: double.infinity,
@@ -238,7 +253,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ---------------------- REGISTER LINK ----------------------
+  // --------------------------------------------------------
+  // REGISTER LINK
+  // --------------------------------------------------------
   Widget _buildRegisterLink() {
     return TextButton(
       onPressed: () => Navigator.push(
@@ -252,7 +269,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ---------------------- LOADING OVERLAY ----------------------
+  // --------------------------------------------------------
+  // LOADING OVERLAY
+  // --------------------------------------------------------
   Widget _buildLoadingOverlay() {
     return Container(
       color: Colors.black54,
@@ -262,3 +281,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
