@@ -130,6 +130,7 @@ class ApiService {
 
   // ===============================================================
   // REGISTER — POST /auth/register
+  // FIXED: → Now uses required named param nickname
   // ===============================================================
   static Future<Map<String, dynamic>?> register(
     String username,
@@ -179,7 +180,6 @@ class ApiService {
 
       final body = jsonDecode(res.body);
 
-      // Extract messages list
       final list = body["messages"] ?? [];
 
       return List<MessageModel>.from(

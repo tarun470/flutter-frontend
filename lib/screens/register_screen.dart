@@ -46,9 +46,9 @@ class _RegisterScreenState extends State<RegisterScreen>
     super.dispose();
   }
 
-  // -------------------------------------------------------
-  // REGISTER LOGIC (FIXED)
-  // -------------------------------------------------------
+  // =====================================================
+  // REGISTER LOGIC — 100% FIXED
+  // =====================================================
   Future<void> register() async {
     final username = usernameCtrl.text.trim().toLowerCase();
     final nick = nicknameCtrl.text.trim();
@@ -67,8 +67,12 @@ class _RegisterScreenState extends State<RegisterScreen>
     setState(() => loading = true);
 
     try {
-      // 🔥 FIXED: Correct argument order
-      final res = await ApiService.register(username, pass, nick);
+      // ✅ Correct API signature
+      final res = await ApiService.register(
+        username,
+        pass,
+        nickname: nick,
+      );
 
       if (!mounted) return;
       setState(() => loading = false);
@@ -78,16 +82,18 @@ class _RegisterScreenState extends State<RegisterScreen>
         return;
       }
 
-      final registeredUser = res['user'];
-      final usernameText = registeredUser?['username'] ?? username;
+      final user = res['user'];
+      final usernameText = user.username;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("🎉 Account created for $usernameText! Please log in."),
+          content:
+              Text("🎉 Account created for $usernameText! Please log in."),
           backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14)),
         ),
       );
 
@@ -95,6 +101,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
+
     } catch (e) {
       if (!mounted) return;
       setState(() => loading = false);
@@ -109,14 +116,15 @@ class _RegisterScreenState extends State<RegisterScreen>
         backgroundColor: Colors.redAccent,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
 
-  // -------------------------------------------------------
+  // =====================================================
   // UI
-  // -------------------------------------------------------
+  // =====================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -131,7 +139,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  // ---------------------- BACKGROUND ----------------------
   Widget _background() {
     return Container(
       decoration: const BoxDecoration(
@@ -148,7 +155,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  // ---------------------- FORM CARD ----------------------
   Widget _formCard() {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
@@ -194,7 +200,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  // ---------------------- TITLE ----------------------
   Widget _title() {
     return Column(
       children: [
@@ -221,8 +226,8 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  // ---------------------- INPUT FIELD ----------------------
-  Widget _input(TextEditingController ctrl, String label, String autofill) {
+  Widget _input(
+      TextEditingController ctrl, String label, String autofill) {
     return TextField(
       controller: ctrl,
       style: const TextStyle(color: Colors.white),
@@ -231,7 +236,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  // ---------------------- PASSWORD FIELD ----------------------
   Widget _passwordField() {
     return TextField(
       controller: passwordCtrl,
@@ -250,7 +254,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  // ---------------------- REGISTER BUTTON ----------------------
   Widget _registerButton() {
     return SizedBox(
       width: double.infinity,
@@ -273,7 +276,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  // ---------------------- LOGIN LINK ----------------------
   Widget _loginLink() {
     return TextButton(
       onPressed: () => Navigator.pushReplacement(
@@ -296,7 +298,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  // ---------------------- LOADING OVERLAY ----------------------
   Widget _loadingOverlay() {
     return Container(
       color: Colors.black.withOpacity(0.6),
