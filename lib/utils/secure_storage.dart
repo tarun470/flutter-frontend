@@ -1,80 +1,89 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// A faster, safer Secure Storage wrapper with:
-/// - Optional in-memory caching
-/// - Automatic Web fallback
-/// - Cleaner API usage
+/// Secure Storage wrapper with:
+/// ✔ Mobile secure storage
+/// ✔ Web-friendly in-memory fallback
+/// ✔ Fast RAM cache for all platforms
 class SecureStorageService {
   static final SecureStorageService _instance = SecureStorageService._internal();
   factory SecureStorageService() => _instance;
   SecureStorageService._internal();
 
-  // Secure storage NOT supported on Flutter Web → use memory map
-  final FlutterSecureStorage _storage =
-      !kIsWeb ? const FlutterSecureStorage() : const FlutterSecureStorage();
+  /// Secure Storage for Mobile (disabled for Web)
+  final FlutterSecureStorage? _storage =
+      kIsWeb ? null : const FlutterSecureStorage();
 
-  static const String _jwtKey = 'JWT_TOKEN';
-  static const String _userIdKey = 'USER_ID';
-  static const String _usernameKey = 'USERNAME';
+  // Keys
+  static const String _jwtKey = "JWT_TOKEN";
+  static const String _userIdKey = "USER_ID";
+  static const String _usernameKey = "USERNAME";
 
-  /// 🔥 In-memory cache = avoids disk read every time → 5x faster
+  /// Fast in-memory cache (RAM)
   final Map<String, String?> _cache = {};
 
-  // ------------------------------
-  // Save Methods
-  // ------------------------------
+  // ------------------------------------------------------------
+  // SAVE
+  // ------------------------------------------------------------
   Future<void> saveToken(String token) => _write(_jwtKey, token);
   Future<void> saveUserId(String id) => _write(_userIdKey, id);
-  Future<void> saveUsername(String username) => _write(_usernameKey, username);
+  Future<void> saveUsername(String name) => _write(_usernameKey, name);
 
-  // ------------------------------
-  // Get Methods
-  // ------------------------------
+  // ------------------------------------------------------------
+  // READ
+  // ------------------------------------------------------------
   Future<String?> getToken() => _read(_jwtKey);
   Future<String?> getUserId() => _read(_userIdKey);
   Future<String?> getUsername() => _read(_usernameKey);
 
-  // ------------------------------
-  // Delete Methods
-  // ------------------------------
+  // ------------------------------------------------------------
+  // DELETE / CLEAR
+  // ------------------------------------------------------------
   Future<void> deleteToken() => _delete(_jwtKey);
   Future<void> deleteUserId() => _delete(_userIdKey);
 
-  // Clear everything (logout)
   Future<void> clearAll() async {
+    _cache.clear();
+
+    // No secure storage on web
+    if (kIsWeb || _storage == null) return;
+
     try {
-      _cache.clear();
-      if (!kIsWeb) await _storage.deleteAll();
+      await _storage!.deleteAll();
     } catch (e) {
-      debugPrint("⚠️ Error clearing storage: $e");
+      debugPrint("⚠️ clearAll() error: $e");
     }
   }
 
-  // ------------------------------
-  // Internal Helpers
-  // ------------------------------
+  // ------------------------------------------------------------
+  // INTERNAL STORAGE LOGIC
+  // ------------------------------------------------------------
 
   Future<void> _write(String key, String value) async {
-    try {
-      _cache[key] = value;
-      if (!kIsWeb) await _storage.write(key: key, value: value);
-    } catch (e) {
-      debugPrint("⚠️ Error writing [$key]: $e");
+    // Always update RAM cache
+    _cache[key] = value;
+
+    // Save to secure storage only on mobile
+    if (!kIsWeb && _storage != null) {
+      try {
+        await _storage!.write(key: key, value: value);
+      } catch (e) {
+        debugPrint("⚠️ Error writing [$key]: $e");
+      }
     }
   }
 
   Future<String?> _read(String key) async {
+    // 1) RAM cache (fastest)
+    if (_cache.containsKey(key)) return _cache[key];
+
+    // 2) On web → return null (persistent storage not allowed)
+    if (kIsWeb || _storage == null) return null;
+
+    // 3) Mobile secure storage
     try {
-      // 1️⃣ Return from RAM cache → fastest
-      if (_cache.containsKey(key)) return _cache[key];
-
-      // 2️⃣ On Web, secure storage doesn't persist → return null
-      if (kIsWeb) return null;
-
-      // 3️⃣ Read from secure storage
-      final value = await _storage.read(key: key);
-      _cache[key] = value;
+      final value = await _storage!.read(key: key);
+      _cache[key] = value; // cache it
       return value;
     } catch (e) {
       debugPrint("⚠️ Error reading [$key]: $e");
@@ -83,11 +92,14 @@ class SecureStorageService {
   }
 
   Future<void> _delete(String key) async {
-    try {
-      _cache.remove(key);
-      if (!kIsWeb) await _storage.delete(key: key);
-    } catch (e) {
-      debugPrint("⚠️ Error deleting [$key]: $e");
+    _cache.remove(key);
+
+    if (!kIsWeb && _storage != null) {
+      try {
+        await _storage!.delete(key: key);
+      } catch (e) {
+        debugPrint("⚠️ Error deleting [$key]: $e");
+      }
     }
   }
 }

@@ -66,19 +66,28 @@ class _RegisterScreenState extends State<RegisterScreen>
 
     setState(() => loading = true);
 
-    final res = await ApiService.register(username, pass, nickname: nick);
+    try {
+      // 🔥 FIXED: Correct argument order
+      final res = await ApiService.register(username, pass, nick);
 
-    setState(() => loading = false);
+      if (!mounted) return;
+      setState(() => loading = false);
 
-    if (res != null) {
+      if (res == null) {
+        _error("Registration failed. Try a different username.");
+        return;
+      }
+
       final registeredUser = res['user'];
+      final usernameText = registeredUser?['username'] ?? username;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            "🎉 Account created for ${registeredUser.username}! Please log in.",
-          ),
+          content: Text("🎉 Account created for $usernameText! Please log in."),
           backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       );
 
@@ -86,14 +95,22 @@ class _RegisterScreenState extends State<RegisterScreen>
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
-    } else {
-      _error("Registration failed. Username might already exist.");
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => loading = false);
+      _error("Registration failed. Please try again.");
     }
   }
 
   void _error(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
     );
   }
 

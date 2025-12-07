@@ -6,7 +6,7 @@ import '../utils/secure_storage.dart';
 import '../utils/constants.dart';
 
 /// ===============================================================
-/// USER MODEL  — Matches NEW backend exactly
+/// USER MODEL
 /// ===============================================================
 class UserModel {
   final String id;
@@ -19,19 +19,18 @@ class UserModel {
     required this.nickname,
   });
 
-  // Used for LOGIN response
   factory UserModel.fromLogin(Map<String, dynamic> json) {
+    final u = json["user"] ?? {};
     return UserModel(
-      id: json["user"]["id"] ?? json["user"]["_id"] ?? "",
-      username: json["user"]["username"] ?? "",
-      nickname: json["user"]["nickname"] ?? json["user"]["username"] ?? "",
+      id: u["_id"] ?? u["id"] ?? "",
+      username: u["username"] ?? "",
+      nickname: u["nickname"] ?? u["username"] ?? "",
     );
   }
 
-  // Used for REGISTER response
   factory UserModel.fromRegister(Map<String, dynamic> json) {
     return UserModel(
-      id: json["id"] ?? json["_id"] ?? "",
+      id: json["_id"] ?? json["id"] ?? "",
       username: json["username"] ?? "",
       nickname: json["nickname"] ?? "",
     );
@@ -67,14 +66,14 @@ class MessageModel {
       type: json["type"] ?? "text",
       fileUrl: json["fileUrl"],
       fileName: json["fileName"],
-      roomId: json["roomId"] ?? "global",
+      roomId: json["roomId"] ?? "general",
       edited: json["edited"] ?? false,
     );
   }
 }
 
 /// ===============================================================
-/// API SERVICE — Login, Register, Messages, File Upload
+/// API SERVICE
 /// ===============================================================
 class ApiService {
   static final SecureStorageService _storage = SecureStorageService();
@@ -88,10 +87,12 @@ class ApiService {
   }
 
   // ======================================================================
-  // LOGIN — Matches backend: { message, token, user: { id, username, ... } }
+  // LOGIN — POST /api/auth/login
   // ======================================================================
   static Future<Map<String, dynamic>?> loginUser(
-      String username, String password) async {
+    String username,
+    String password,
+  ) async {
     final url = Uri.parse("${Constants.apiUrl}/auth/login");
 
     try {
@@ -104,9 +105,6 @@ class ApiService {
         }),
       );
 
-      print("LOGIN STATUS: ${res.statusCode}");
-      print("LOGIN BODY: ${res.body}");
-
       if (res.statusCode != 200) return null;
 
       final data = jsonDecode(res.body);
@@ -116,10 +114,9 @@ class ApiService {
 
       final user = UserModel.fromLogin(data);
 
-      // Save to secure storage
       await _storage.saveToken(token);
       await _storage.saveUserId(user.id);
-      await _storage.saveUsername(user.username);
+      await _storage.saveUsername(user.nickname);
 
       return {
         "token": token,
@@ -132,7 +129,7 @@ class ApiService {
   }
 
   // ======================================================================
-  // REGISTER — Matches backend: { message, user: { id, username, nickname } }
+  // REGISTER — POST /api/auth/register
   // ======================================================================
   static Future<Map<String, dynamic>?> register(
     String username,
@@ -152,9 +149,6 @@ class ApiService {
         }),
       );
 
-      print("REGISTER STATUS: ${res.statusCode}");
-      print("REGISTER BODY: ${res.body}");
-
       if (res.statusCode != 201) return null;
 
       final body = jsonDecode(res.body);
@@ -172,7 +166,7 @@ class ApiService {
   }
 
   // ======================================================================
-  // FETCH MESSAGES
+  // FETCH MESSAGES — GET /api/messages?room=general
   // ======================================================================
   static Future<List<MessageModel>> fetchMessages(
       String roomId, String token) async {
@@ -185,6 +179,7 @@ class ApiService {
         final list = jsonDecode(res.body) as List;
         return list.map((e) => MessageModel.fromJson(e)).toList();
       }
+
       return [];
     } catch (e) {
       print("❌ FETCH MESSAGES ERROR: $e");
@@ -193,7 +188,7 @@ class ApiService {
   }
 
   // ======================================================================
-  // FILE UPLOAD
+  // FILE UPLOAD — POST /api/upload
   // ======================================================================
   static Future<MessageModel?> uploadFile(
     String path,
@@ -223,17 +218,16 @@ class ApiService {
         final json = jsonDecode(res.body);
 
         return MessageModel(
-          id: "",
+          id: json["_id"] ?? "",
           content: "",
           type: "file",
           fileUrl: json["url"],
           fileName: json["fileName"],
-          roomId: "global",
+          roomId: "general",
           edited: false,
         );
       }
 
-      print("❌ FILE UPLOAD FAILED: ${res.body}");
       return null;
     } catch (e) {
       print("❌ FILE UPLOAD ERROR: $e");
@@ -242,7 +236,7 @@ class ApiService {
   }
 
   // ======================================================================
-  // TOKEN SHORTCUTS
+  // TOKEN HELPERS
   // ======================================================================
   static Future<String?> getToken() => _storage.getToken();
   static Future<String?> getUserId() => _storage.getUserId();

@@ -5,7 +5,6 @@ import '../utils/secure_storage.dart';
 class MessageService {
   final SecureStorageService _storage = SecureStorageService();
 
-  /// Fetch message history for a room safely
   Future<List<Message>> fetchHistory(String roomId) async {
     final token = await _storage.getToken();
     if (token == null) return [];
@@ -13,27 +12,29 @@ class MessageService {
     try {
       final list = await ApiService.fetchMessages(roomId, token);
 
-      // Convert MessageModel → Message
       return list.map((m) {
         return Message(
           id: m.id,
-          senderId: "", // backend does not send senderId in MessageModel
+          senderId: "",
           senderName: "",
           roomId: m.roomId,
           content: m.content,
           type: m.type,
-          timestamp: DateTime.now(), // fallback since history API missing timestamp
-          isDelivered: true,
-          isSeen: false,
-          isEdited: m.edited,
-          fileName: m.fileName,
+          timestamp: DateTime.now(),
+
+          // REQUIRED FIELDS 👇
           reactions: {},
+          deliveredTo: [],
+          seenBy: [],
+
+          fileUrl: m.fileUrl,
+          fileName: m.fileName,
+          replyToMessageId: null,
         );
       }).toList();
     } catch (e) {
-      print("❌ MessageService.fetchHistory Exception: $e");
+      print("❌ MessageService.fetchHistory Error: $e");
       return [];
     }
   }
 }
-

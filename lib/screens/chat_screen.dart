@@ -26,22 +26,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final ScrollController scrollController = ScrollController();
 
   List<Message> messages = [];
-  String? token;
   String? userId;
   String? username;
-
-  String currentRoom = 'general';
-  bool isTyping = false;
-
-  Map<String, bool> typingUsers = {};
-  int onlineCount = 0;
-  Map<String, dynamic> onlineUsersMap = {};
+  String? token;
 
   bool showEmoji = false;
-  String? replyToMessageId;
-
   bool loadingHistory = true;
   bool sending = false;
+
+  String currentRoom = "general";
+
+  String? replyToMessageId;
+  Map<String, bool> typingUsers = {};
+  int onlineCount = 0;
 
   @override
   void initState() {
@@ -59,7 +56,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // ---------------- Initialization ----------------
+  // -------------------------------------------------------------
+  // INIT USER + LOAD HISTORY + CONNECT SOCKET
+  // -------------------------------------------------------------
   Future<void> _initializeUser() async {
     token = await secureStorage.getToken();
     userId = await secureStorage.getUserId();
@@ -78,7 +77,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     setState(() => loadingHistory = true);
 
     final hist = await messageService.fetchHistory(currentRoom);
-
     setState(() {
       messages = hist;
       loadingHistory = false;
@@ -94,14 +92,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
-  // ---------------- Socket ----------------
+  // -------------------------------------------------------------
+  // SOCKET CONNECTION + LISTENERS
+  // -------------------------------------------------------------
   void _connectSocket() {
     socketService.connect(token!, onConnect: () {
       socketService.joinRoom(currentRoom);
 
       socketService.onMessage = (msg) {
-        final exists = messages.any((m) => m.id == msg.id);
-        if (!exists) {
+        if (!messages.any((m) => m.id == msg.id)) {
           setState(() => messages.add(msg));
           _scrollToBottom();
         }
@@ -109,6 +108,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       socketService.onTyping = (uid, typing, uname) {
         if (uid == userId) return;
+
         setState(() {
           if (typing) {
             typingUsers[uid] = true;
@@ -118,18 +118,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         });
       };
 
-      socketService.onOnlineUsers = (count, usersMap) {
-        setState(() {
-          onlineCount = count;
-          onlineUsersMap = usersMap ?? {};
-        });
+      socketService.onOnlineUsers = (count, map) {
+        setState(() => onlineCount = count);
       };
 
       socketService.onMessageEdited = (msg) {
-        setState(() {
-          final index = messages.indexWhere((m) => m.id == msg.id);
-          if (index != -1) messages[index] = msg;
-        });
+        final index = messages.indexWhere((m) => m.id == msg.id);
+        if (index != -1) {
+          setState(() => messages[index] = msg);
+        }
       };
 
       socketService.onMessageDeleted = (msg) {
@@ -137,38 +134,40 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       };
 
       socketService.onReactionUpdated = (payload) {
-        final id = payload['messageId'];
-        final map = Map<String, int>.from(payload['reactions'] ?? {});
-        setState(() {
-          final index = messages.indexWhere((m) => m.id == id);
-          if (index != -1) messages[index].reactions = map;
-        });
+        final id = payload["messageId"];
+        final index = messages.indexWhere((m) => m.id == id);
+        if (index != -1) {
+          messages[index].reactions =
+              Map<String, int>.from(payload["reactions"] ?? {});
+          setState(() {});
+        }
       };
 
       socketService.onMessageDelivered = (msg) {
         final index = messages.indexWhere((m) => m.id == msg.id);
         if (index != -1) {
-          setState(() {
-            messages[index].isDelivered = true;
-            messages[index].deliveredTo = msg.deliveredTo;
-          });
+          messages[index].isDelivered = true;
+          messages[index].deliveredTo = msg.deliveredTo;
+          setState(() {});
         }
       };
 
       socketService.onMessageSeen = (msg) {
         final index = messages.indexWhere((m) => m.id == msg.id);
         if (index != -1) {
-          setState(() {
-            messages[index].isSeen = true;
-            messages[index].seenBy = msg.seenBy;
-          });
+          messages[index].isSeen = true;
+          messages[index].seenBy = msg.seenBy;
+          setState(() {});
         }
       };
     });
   }
 
-  void _scrollToBottom({int delayMs = 80}) {
-    Future.delayed(Duration(milliseconds: delayMs), () {
+  // -------------------------------------------------------------
+  // SCROLL TO BOTTOM
+  // -------------------------------------------------------------
+  void _scrollToBottom({int delay = 80}) {
+    Future.delayed(Duration(milliseconds: delay), () {
       if (!scrollController.hasClients) return;
       scrollController.animateTo(
         scrollController.position.maxScrollExtent,
@@ -178,37 +177,30 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
-  // ---------------- Typing ----------------
-  void _onTextChanged(String text) {
-    final t = text.trim().isNotEmpty;
-    if (t != isTyping) {
-      isTyping = t;
-      if (userId != null && username != null) {
-        socketService.sendTyping(currentRoom, userId!, username!, t);
-      }
-    }
-  }
-
-  // ---------------- Send Message ----------------
+  // -------------------------------------------------------------
+  // SEND MESSAGE
+  // -------------------------------------------------------------
   Future<void> _sendText() async {
-    if (sending) return;
-
     final content = messageController.text.trim();
-    if (content.isEmpty || userId == null || username == null) return;
+    if (content.isEmpty) return;
+    if (sending) return;
 
     sending = true;
 
     final tempId = DateTime.now().millisecondsSinceEpoch.toString();
 
+    // ---- TEMP MESSAGE FOR UI ----
     final temp = Message(
       id: tempId,
       senderId: userId!,
       senderName: username!,
       roomId: currentRoom,
       content: content,
-      type: 'text',
+      type: "text",
       timestamp: DateTime.now(),
       reactions: {},
+      deliveredTo: [],
+      seenBy: [],
       replyToMessageId: replyToMessageId,
     );
 
@@ -221,6 +213,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     _scrollToBottom();
 
+    // ---- SEND TO SERVER ----
     socketService.sendMessage(
       content,
       roomId: currentRoom,
@@ -232,50 +225,65 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     sending = false;
   }
 
-  void _editMessage(String id, String newText) =>
-      socketService.editMessage(id, newText);
-
-  void _deleteMessage(String id, {bool forEveryone = false}) =>
-      socketService.deleteMessage(id, forEveryone: forEveryone);
-
-  void _addReaction(String id, String emoji) =>
-      socketService.addReaction(id, emoji);
-
-  // ---------------- File Picker ----------------
+  // -------------------------------------------------------------
+  // FILE UPLOAD
+  // -------------------------------------------------------------
   Future<void> _pickFile() async {
     try {
-      final res = await FilePicker.platform.pickFiles(withData: false);
+      final res = await FilePicker.platform.pickFiles();
+
       if (res == null || res.files.isEmpty) return;
 
-      final path = res.files.single.path;
+      final path = res.files.single.path!;
       final name = res.files.single.name;
 
-      if (path == null) return;
-
-      final upload = await ApiService.uploadFile(
+      final uploaded = await ApiService.uploadFile(
         path,
-        'file',
+        "file",
         token: token,
         filename: name,
       );
 
-      // Our ApiService returns MessageModel? with fileUrl & fileName
-      if (upload == null || upload.fileUrl == null) return;
+      if (uploaded == null || uploaded.fileUrl == null) return;
 
-      socketService.sendFile(
-        upload.fileUrl!,
-        upload.fileName ?? name,
+      final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Local preview message
+      final temp = Message(
+        id: tempId,
+        senderId: userId!,
+        senderName: username!,
         roomId: currentRoom,
-        senderName: username ?? '',
+        content: uploaded.fileUrl!,
+        type: "file",
+        timestamp: DateTime.now(),
+        reactions: {},
+        deliveredTo: [],
+        seenBy: [],
+        fileUrl: uploaded.fileUrl,
+        fileName: uploaded.fileName ?? name,
+      );
+
+      setState(() => messages.add(temp));
+      _scrollToBottom();
+
+      // Send to server
+      socketService.sendFile(
+        uploaded.fileUrl!,
+        uploaded.fileName ?? name,
+        roomId: currentRoom,
+        senderName: username!,
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("File upload failed: $e")),
+        SnackBar(content: Text("Upload failed: $e")),
       );
     }
   }
 
-  // ---------------- Find Reply ----------------
+  // -------------------------------------------------------------
+  // FIND MESSAGE BY ID (for reply preview)
+  // -------------------------------------------------------------
   Message? _findMessage(String id) {
     try {
       return messages.firstWhere((m) => m.id == id);
@@ -284,9 +292,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  // ---------------- UI Helper ----------------
+  // -------------------------------------------------------------
+  // STATUS ICONS
+  // -------------------------------------------------------------
   Widget _statusIcon(Message m) {
-    if (m.senderId != userId) return const SizedBox.shrink();
+    if (m.senderId != userId) return const SizedBox();
 
     if (!m.isDelivered) {
       return const Icon(Icons.watch_later_outlined,
@@ -297,232 +307,109 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return const Icon(Icons.done, size: 14, color: Colors.white70);
     }
 
-    return const Icon(Icons.done_all,
-        size: 14, color: Colors.lightBlueAccent);
+    return const Icon(Icons.done_all, size: 14, color: Colors.lightBlueAccent);
   }
 
-  // ---------------- Image Preview ----------------
-  Widget _imagePreview(String url) {
-    return GestureDetector(
-      onTap: () => showDialog(
-        barrierColor: Colors.black87,
-        context: context,
-        builder: (_) => GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Center(child: InteractiveViewer(child: Image.network(url))),
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          url,
-          width: 200,
-          height: 140,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            width: 200,
-            height: 140,
-            color: Colors.white12,
-            child: const Icon(Icons.broken_image, color: Colors.white30),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ---------------- File View ----------------
-  Widget _fileCard(String url, String name) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white12,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.insert_drive_file,
-              size: 32, color: Colors.white70),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              name,
-              style: const TextStyle(color: Colors.white70),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.open_in_new, color: Colors.white70),
-            onPressed: () => showDialog(
-              context: context,
-              builder: (_) => AlertDialog(
-                title: const Text('File URL'),
-                content: SelectableText(url),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Close'))
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------- Reactions Row ----------------
-  Widget _reactionsRow(Message m) {
-    if (m.reactions == null || m.reactions!.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Wrap(
-        spacing: 6,
-        children: m.reactions!.entries.map((e) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.35),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(e.key, style: const TextStyle(fontSize: 14)),
-                const SizedBox(width: 3),
-                Text(
-                  e.value.toString(),
-                  style: const TextStyle(fontSize: 11, color: Colors.white70),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  // ---------------- Message Tile ----------------
+  // -------------------------------------------------------------
+  // MESSAGE BUBBLE UI
+  // -------------------------------------------------------------
   Widget _messageTile(Message m) {
-    final isMe = m.senderId == userId;
-    final timeStr = DateFormat('hh:mm a').format(m.timestamp.toLocal());
-    final replied = m.replyToMessageId != null
+    final isMe = (m.senderId == userId);
+    final timeStr = DateFormat('hh:mm a').format(m.timestamp);
+
+    final reply = m.replyToMessageId != null
         ? _findMessage(m.replyToMessageId!)
         : null;
 
     final bubbleColor = isMe
         ? const LinearGradient(
-            colors: [Color(0xFF0fd9ff), Color(0xFF0061ff)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          )
+            colors: [Color(0xFF0fd9ff), Color(0xFF0061ff)])
         : const LinearGradient(
-            colors: [Color(0xFF222831), Color(0xFF1B2A3A)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          );
+            colors: [Color(0xFF222831), Color(0xFF1B2A3A)]);
 
     return GestureDetector(
       onLongPress: () => _onLongPress(m),
       child: Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
         child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.75,
-            ),
+            constraints:
+                BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: bubbleColor,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16),
-                  topRight: const Radius.circular(16),
-                  bottomLeft:
-                      isMe ? const Radius.circular(16) : const Radius.circular(4),
-                  bottomRight:
-                      isMe ? const Radius.circular(4) : const Radius.circular(16),
-                ),
+                borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.5),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                  if (isMe)
-                    BoxShadow(
-                      color: Colors.cyanAccent.withOpacity(0.18),
-                      blurRadius: 12,
-                      spreadRadius: 0.5,
-                    ),
+                      color: Colors.black.withOpacity(0.4),
+                      blurRadius: 6,
+                      offset: const Offset(0, 3))
                 ],
               ),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.all(10),
                 child: Column(
                   crossAxisAlignment:
                       isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                   children: [
                     if (!isMe)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Text(
-                          m.senderName,
-                          style: const TextStyle(
-                              color: Colors.white70,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12),
-                        ),
+                      Text(
+                        m.senderName,
+                        style:
+                            const TextStyle(color: Colors.white70, fontSize: 12),
                       ),
 
-                    if (replied != null)
+                    if (reply != null)
                       Container(
-                        margin: const EdgeInsets.only(top: 4, bottom: 6),
+                        margin: const EdgeInsets.only(bottom: 6, top: 4),
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.25),
+                          color: Colors.black26,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          "${replied.senderName}: ${replied.content}",
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 11),
+                          "${reply.senderName}: ${reply.content}",
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12),
                         ),
                       ),
 
-                    if (m.type == 'image')
-                      _imagePreview(m.content)
-                    else if (m.type == 'file')
-                      _fileCard(m.content, m.fileName ?? "file")
+                    if (m.type == "image")
+                      Image.network(m.content, width: 200, height: 140)
+                    else if (m.type == "file")
+                      Row(
+                        children: [
+                          const Icon(Icons.insert_drive_file,
+                              color: Colors.white70),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(m.fileName ?? "file",
+                                overflow: TextOverflow.ellipsis,
+                                style:
+                                    const TextStyle(color: Colors.white70)),
+                          ),
+                        ],
+                      )
                     else
                       Text(
                         m.content,
                         style: const TextStyle(
-                            color: Colors.white, fontSize: 15, height: 1.3),
+                            color: Colors.white, fontSize: 15),
                       ),
 
-                    _reactionsRow(m),
-
-                    const SizedBox(height: 4),
                     Row(
                       mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Text(
-                          timeStr,
-                          style: const TextStyle(
-                              color: Colors.white60, fontSize: 10),
-                        ),
+                        Text(timeStr,
+                            style: const TextStyle(
+                                color: Colors.white60, fontSize: 10)),
                         const SizedBox(width: 6),
                         _statusIcon(m),
                       ],
-                    ),
+                    )
                   ],
                 ),
               ),
@@ -533,345 +420,125 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
-  // ---------------- Long press actions ----------------
+  // -------------------------------------------------------------
+  // LONG PRESS MENU
+  // -------------------------------------------------------------
   void _onLongPress(Message m) async {
     final isMe = m.senderId == userId;
 
     final choice = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: const Color(0xFF10131A),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (c) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              height: 4,
-              width: 40,
-              margin: const EdgeInsets.only(top: 8, bottom: 6),
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(100),
-              ),
+      backgroundColor: Colors.black87,
+      builder: (c) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+              leading: const Icon(Icons.reply, color: Colors.white),
+              title: const Text("Reply",
+                  style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.pop(c, "reply")),
+          if (isMe)
+            ListTile(
+                leading: const Icon(Icons.edit, color: Colors.white),
+                title: const Text("Edit",
+                    style: TextStyle(color: Colors.white)),
+                onTap: () => Navigator.pop(c, "edit")),
+          if (isMe)
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.white),
+              title: const Text("Delete",
+                  style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.pop(c, "del"),
             ),
-            ListTile(
-                title: const Text("Reply", style: TextStyle(color: Colors.white)),
-                leading: const Icon(Icons.reply, color: Colors.white70),
-                onTap: () => Navigator.pop(c, "reply")),
-            if (isMe)
-              ListTile(
-                  title:
-                      const Text("Edit", style: TextStyle(color: Colors.white)),
-                  leading: const Icon(Icons.edit, color: Colors.white70),
-                  onTap: () => Navigator.pop(c, "edit")),
-            if (isMe)
-              ListTile(
-                  title: const Text("Delete for me",
-                      style: TextStyle(color: Colors.white)),
-                  leading: const Icon(Icons.delete, color: Colors.white70),
-                  onTap: () => Navigator.pop(c, "del_local")),
-            if (isMe)
-              ListTile(
-                  title: const Text("Delete for everyone",
-                      style: TextStyle(color: Colors.white)),
-                  leading:
-                      const Icon(Icons.delete_forever, color: Colors.white70),
-                  onTap: () => Navigator.pop(c, "del_all")),
-            ListTile(
-                title:
-                    const Text("React", style: TextStyle(color: Colors.white)),
-                leading:
-                    const Icon(Icons.emoji_emotions, color: Colors.white70),
-                onTap: () => Navigator.pop(c, "react")),
-            const SizedBox(height: 6),
-          ],
-        ),
+          ListTile(
+            leading:
+                const Icon(Icons.emoji_emotions, color: Colors.white),
+            title:
+                const Text("React", style: TextStyle(color: Colors.white)),
+            onTap: () => Navigator.pop(c, "react"),
+          )
+        ],
       ),
     );
-
-    if (choice == null) return;
 
     if (choice == "reply") {
       setState(() => replyToMessageId = m.id);
-    } else if (choice == "edit") {
-      final edited = await _editDialog(m.content);
-      if (edited != null && edited.trim().isNotEmpty) {
-        _editMessage(m.id, edited.trim());
-      }
-    } else if (choice == "del_local") {
-      _deleteMessage(m.id, forEveryone: false);
-    } else if (choice == "del_all") {
-      _deleteMessage(m.id, forEveryone: true);
-    } else if (choice == "react") {
-      final emoji = await _emojiPicker();
-      if (emoji != null) _addReaction(m.id, emoji);
     }
   }
 
-  Future<String?> _editDialog(String oldText) async {
-    final ctrl = TextEditingController(text: oldText);
-
-    return showDialog<String>(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: Colors.grey.shade900,
-        title: const Text("Edit message"),
-        content: TextField(
-          controller: ctrl,
-          style: const TextStyle(color: Colors.white),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(c, null),
-              child: const Text("Cancel")),
-          TextButton(
-              onPressed: () => Navigator.pop(c, ctrl.text),
-              child: const Text("Save")),
-        ],
-      ),
-    );
-  }
-
-  Future<String?> _emojiPicker() async {
-    String? chosen;
-
-    await showModalBottomSheet(
-      context: context,
-      builder: (c) => SizedBox(
-        height: 300,
-        child: EmojiPicker(
-          onEmojiSelected: (_, emoji) {
-            chosen = emoji.emoji;
-            Navigator.pop(c);
-          },
-          config: const Config(columns: 8, emojiSizeMax: 32),
-        ),
-      ),
-    );
-
-    return chosen;
-  }
-
-  // ---------------- AppBar ----------------
-  PreferredSizeWidget _topBar() {
-    final typing = typingUsers.isNotEmpty
-        ? (typingUsers.length == 1 ? "typing…" : "${typingUsers.length} typing…")
-        : "$onlineCount online";
-
-    return AppBar(
-      elevation: 0,
-      backgroundColor: Colors.black,
-      flexibleSpace: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF000814), Color(0xFF001D3D)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-      ),
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            currentRoom.toUpperCase(),
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            typing,
-            style: const TextStyle(fontSize: 12, color: Colors.white70),
-          ),
-        ],
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.attach_file),
-          onPressed: _pickFile,
-        ),
-        IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
-      ],
-    );
-  }
-
-  void _logout() async {
-    socketService.disconnect();
-    await secureStorage.clearAll();
-    _redirectToLogin();
-  }
-
-  // ---------------- Reply Banner ----------------
-  Widget _replyBanner() {
-    if (replyToMessageId == null) return const SizedBox.shrink();
-    final replied = _findMessage(replyToMessageId!);
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white10,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white24, width: 0.6),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 3,
-            height: 32,
-            decoration: BoxDecoration(
-              color: Colors.cyanAccent,
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              replied == null
-                  ? "Replying…"
-                  : "${replied.senderName}: ${replied.content}",
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18, color: Colors.white54),
-            onPressed: () => setState(() => replyToMessageId = null),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------- Input box ----------------
+  // -------------------------------------------------------------
+  // INPUT BAR
+  // -------------------------------------------------------------
   Widget _inputArea() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blueAccent.withOpacity(0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.all(8),
       child: Row(
         children: [
           IconButton(
-              icon: Icon(
-                showEmoji ? Icons.keyboard : Icons.emoji_emotions,
-                color: Colors.white70,
-              ),
-              onPressed: () => setState(() => showEmoji = !showEmoji)),
+            icon: Icon(showEmoji ? Icons.keyboard : Icons.emoji_emotions),
+            color: Colors.white70,
+            onPressed: () => setState(() => showEmoji = !showEmoji),
+          ),
           Expanded(
             child: TextField(
               controller: messageController,
               style: const TextStyle(color: Colors.white),
-              onChanged: _onTextChanged,
-              decoration: InputDecoration(
-                  border: InputBorder.none,
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  hintText:
-                      replyToMessageId != null ? "Replying…" : "Type a message…"),
               minLines: 1,
               maxLines: 4,
-              onSubmitted: (_) => _sendText(),
+              onChanged: (_) {},
+              decoration: const InputDecoration(
+                hintText: "Type a message…",
+                hintStyle: TextStyle(color: Colors.white38),
+                border: InputBorder.none,
+              ),
             ),
           ),
           IconButton(
-              icon: const Icon(Icons.send, color: Colors.cyanAccent),
-              onPressed: _sendText),
+            icon: const Icon(Icons.send, color: Colors.cyanAccent),
+            onPressed: _sendText,
+          ),
         ],
       ),
     );
   }
 
-  // ---------------- Build ----------------
+  // -------------------------------------------------------------
+  // BUILD
+  // -------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        if (showEmoji) {
-          setState(() => showEmoji = false);
-          return false;
-        }
-        return true;
-      },
-      child: Scaffold(
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: Text("GENERAL ($onlineCount online)"),
         backgroundColor: Colors.black,
-        appBar: _topBar(),
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF020817), Color(0xFF050B18)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: Column(
-            children: [
-              Expanded(
-                child: loadingHistory
-                    ? const Center(child: CircularProgressIndicator())
-                    : Stack(
-                        children: [
-                          ListView.builder(
-                            controller: scrollController,
-                            padding: const EdgeInsets.only(bottom: 80, top: 6),
-                            itemCount: messages.length,
-                            itemBuilder: (_, i) => _messageTile(messages[i]),
-                          ),
-                          if (typingUsers.isNotEmpty)
-                            Positioned(
-                              left: 12,
-                              bottom: 10,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.65),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                      color: Colors.white24, width: 0.5),
-                                ),
-                                child: Text(
-                                  typingUsers.length == 1
-                                      ? "typing…"
-                                      : "${typingUsers.length} typing…",
-                                  style: const TextStyle(
-                                      color: Colors.white70, fontSize: 12),
-                                ),
-                              ),
-                            )
-                        ],
-                      ),
-              ),
-              _replyBanner(),
-              if (showEmoji)
-                SizedBox(
-                  height: 260,
-                  child: EmojiPicker(
-                    onEmojiSelected: (_, emoji) {
-                      messageController.text += emoji.emoji;
-                      _onTextChanged(messageController.text);
-                    },
-                    config: const Config(columns: 8, emojiSizeMax: 32),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: loadingHistory
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    controller: scrollController,
+                    padding: const EdgeInsets.only(bottom: 80),
+                    itemCount: messages.length,
+                    itemBuilder: (_, i) => _messageTile(messages[i]),
                   ),
-                ),
-              _inputArea(),
-            ],
           ),
-        ),
+          if (showEmoji)
+            SizedBox(
+              height: 250,
+              child: EmojiPicker(
+                onEmojiSelected: (_, emoji) {
+                  messageController.text += emoji.emoji;
+                },
+                config: const Config(columns: 8),
+              ),
+            ),
+          _inputArea(),
+        ],
       ),
     );
   }
 }
+

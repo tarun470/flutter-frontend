@@ -2,9 +2,12 @@ class Message {
   final String id;
   final String senderId;
   final String senderName;
+  final String? senderAvatar;
+
   final String roomId;
   final String content;
-  final String type; // text | image | file | reply
+  final String type; // text | image | file | system
+
   final DateTime timestamp;
 
   bool isDelivered;
@@ -12,12 +15,15 @@ class Message {
   bool isEdited;
 
   String? replyToMessageId;
-  Map<String, int>? reactions;
+  Map<String, int> reactions;
 
   List<String> deliveredTo;
   List<String> seenBy;
 
+  final String? fileUrl;
   final String? fileName;
+
+  final bool deletedForEveryone;
 
   Message({
     required this.id,
@@ -27,117 +33,125 @@ class Message {
     required this.content,
     required this.type,
     required this.timestamp,
+    required this.reactions,
+    required this.deliveredTo,
+    required this.seenBy,
+    this.senderAvatar,
+    this.replyToMessageId,
+    this.fileUrl,
+    this.fileName,
+    this.deletedForEveryone = false,
     this.isDelivered = false,
     this.isSeen = false,
     this.isEdited = false,
-    this.replyToMessageId,
-    this.reactions,
-    List<String>? deliveredTo,
-    List<String>? seenBy,
-    this.fileName,
-  })  : deliveredTo = deliveredTo ?? [],
-        seenBy = seenBy ?? [];
+  });
 
-  // ------------------------------
-  // PARSERS
-  // ------------------------------
+  // ------------------------------------------------
+  // HELPERS
+  // ------------------------------------------------
+  static String _parseId(dynamic value) {
+    if (value == null) return "";
+    if (value is String) return value;
 
-  static String _parseId(dynamic field) {
-    if (field == null) return '';
-    if (field is String) return field;
-
-    // MongoDB {"$oid": "..."}
-    if (field is Map && field.containsKey('\$oid')) {
-      return field['\$oid'];
+    if (value is Map && value.containsKey("\$oid")) {
+      return value["\$oid"];
     }
 
-    // Node may send object → convert to string safely
-    return field.toString();
+    return value.toString();
   }
 
-  static DateTime _parseDate(dynamic field) {
+  static DateTime _parseDate(dynamic value) {
     try {
-      if (field == null) return DateTime.now();
+      if (value is String) return DateTime.parse(value);
 
-      if (field is String) return DateTime.parse(field);
+      if (value is Map && value["\$date"] != null) {
+        final d = value["\$date"];
+        if (d is String) return DateTime.parse(d);
 
-      // MongoDB {"$date": {"$numberLong": "1234"}}
-      if (field is Map) {
-        final date = field['\$date'];
-
-        if (date is Map && date['\$numberLong'] != null) {
+        if (d is Map && d["\$numberLong"] != null) {
           return DateTime.fromMillisecondsSinceEpoch(
-            int.parse(date['\$numberLong']),
+            int.parse(d["\$numberLong"]),
           );
         }
-
-        if (date is String) return DateTime.parse(date);
       }
     } catch (_) {}
 
     return DateTime.now();
   }
 
-  // ------------------------------
+  // ------------------------------------------------
   // FROM JSON
-  // ------------------------------
-
+  // ------------------------------------------------
   factory Message.fromJson(Map<String, dynamic> json) {
+    final senderMap = json["sender"] is Map ? json["sender"] as Map : null;
+
     return Message(
-      id: _parseId(json['_id'] ?? json['id']),
-      senderId: _parseId(json['sender'] ?? json['senderId'] ?? json['from']),
-      senderName: json['senderName'] ??
-          (json['sender'] is Map ? json['sender']['username'] ?? '' : ''),
+      id: _parseId(json["_id"]),
+      senderId: senderMap != null ? _parseId(senderMap["_id"]) : "",
+      senderName: senderMap?["nickname"] ?? senderMap?["username"] ?? "",
+      senderAvatar: senderMap?["avatar"],
 
-      roomId: json['room'] ?? json['roomId'] ?? 'global',
-      content: json['content'] ?? '',
-      type: json['type'] ?? 'text',
+      roomId: json["roomId"] ?? "global",
+      content: json["content"] ?? "",
+      type: json["type"] ?? "text",
 
-      timestamp: _parseDate(json['timestamp'] ?? json['createdAt']),
+      timestamp: _parseDate(json["createdAt"]),
 
-      isDelivered: json['isDelivered'] ?? json['status'] == 'delivered',
-      isSeen: json['isSeen'] ?? json['status'] == 'seen',
-      isEdited: json['isEdited'] ?? false,
+      fileUrl: json["fileUrl"],
+      fileName: json["fileName"],
 
-      replyToMessageId: _parseId(json['replyTo']),
+      replyToMessageId: json["replyTo"] != null
+          ? _parseId(json["replyTo"])
+          : null,
 
-      reactions: json['reactions'] != null
-          ? Map<String, int>.from(json['reactions'])
+      reactions: json["reactions"] != null
+          ? Map<String, int>.from(json["reactions"])
           : {},
 
-      deliveredTo: json['deliveredTo'] != null
-          ? List<String>.from(json['deliveredTo'].map((e) => e.toString()))
+      deliveredTo: json["deliveredTo"] != null
+          ? List<String>.from(json["deliveredTo"].map((e) => e.toString()))
           : [],
 
-      seenBy: json['seenBy'] != null
-          ? List<String>.from(json['seenBy'].map((e) => e.toString()))
+      seenBy: json["seenBy"] != null
+          ? List<String>.from(json["seenBy"].map((e) => e.toString()))
           : [],
 
-      fileName: json['fileName'],
+      isDelivered: json["isDelivered"] ?? false,
+      isSeen: json["isSeen"] ?? false,
+      isEdited: json["edited"] ?? false,
+
+      deletedForEveryone: json["deletedForEveryone"] ?? false,
     );
   }
 
-  // ------------------------------
+  // ------------------------------------------------
   // TO JSON
-  // ------------------------------
-
+  // ------------------------------------------------
   Map<String, dynamic> toJson() {
     return {
-      '_id': id,
-      'senderId': senderId,
-      'senderName': senderName,
-      'roomId': roomId,
-      'content': content,
-      'type': type,
-      'timestamp': timestamp.toIso8601String(),
-      'isDelivered': isDelivered,
-      'isSeen': isSeen,
-      'isEdited': isEdited,
-      'replyTo': replyToMessageId,
-      'reactions': reactions,
-      'deliveredTo': deliveredTo,
-      'seenBy': seenBy,
-      'fileName': fileName,
+      "_id": id,
+      "senderId": senderId,
+      "senderName": senderName,
+      "senderAvatar": senderAvatar,
+
+      "roomId": roomId,
+      "content": content,
+      "type": type,
+      "timestamp": timestamp.toIso8601String(),
+
+      "fileUrl": fileUrl,
+      "fileName": fileName,
+
+      "isDelivered": isDelivered,
+      "isSeen": isSeen,
+      "isEdited": isEdited,
+
+      "replyTo": replyToMessageId,
+      "reactions": reactions,
+      "deliveredTo": deliveredTo,
+      "seenBy": seenBy,
+
+      "deletedForEveryone": deletedForEveryone,
     };
   }
 }

@@ -2,6 +2,7 @@ class User {
   final String id;
   final String username;
   final String nickname;
+
   final String? avatar;
   final String? bio;
 
@@ -13,6 +14,10 @@ class User {
   final bool suspended;
 
   final List<String> blockedUsers;
+
+  final String? fcmToken;
+  final String? deviceInfo;
+  final String? socketId;
 
   User({
     required this.id,
@@ -26,14 +31,16 @@ class User {
     this.allowLastSeen = true,
     this.suspended = false,
     this.blockedUsers = const [],
+    this.fcmToken,
+    this.deviceInfo,
+    this.socketId,
   });
 
   // ---------------------------------------------------------
-  // ID PARSER - handles "_id", "id", {"$oid": "..."}
+  // PARSE OBJECT ID
   // ---------------------------------------------------------
   static String _parseId(dynamic value) {
     if (value == null) return "";
-
     if (value is String) return value;
 
     if (value is Map && value.containsKey("\$oid")) {
@@ -44,29 +51,25 @@ class User {
   }
 
   // ---------------------------------------------------------
-  // DATE PARSER - handles string, {"$date": ...}, {"$numberLong": ...}
+  // PARSE DATE ("2024-01..." OR {"$date": ...})
   // ---------------------------------------------------------
   static DateTime? _parseDate(dynamic value) {
     if (value == null) return null;
-
     try {
       if (value is String) return DateTime.parse(value);
 
       if (value is Map && value.containsKey("\$date")) {
         final dateField = value["\$date"];
 
-        // case: {"$date": {"$numberLong": "1700000000000"}}
         if (dateField is Map && dateField.containsKey("\$numberLong")) {
           return DateTime.fromMillisecondsSinceEpoch(
             int.parse(dateField["\$numberLong"]),
           );
         }
 
-        // case: {"$date": "2024-01-01T12:00:00Z"}
         if (dateField is String) return DateTime.parse(dateField);
       }
     } catch (_) {}
-
     return null;
   }
 
@@ -78,6 +81,7 @@ class User {
       id: _parseId(json["_id"] ?? json["id"]),
       username: json["username"] ?? "",
       nickname: json["nickname"] ?? json["username"] ?? "",
+
       avatar: json["avatar"],
       bio: json["bio"],
 
@@ -91,6 +95,10 @@ class User {
       blockedUsers: (json["blockedUsers"] as List<dynamic>? ?? [])
           .map((u) => _parseId(u))
           .toList(),
+
+      fcmToken: json["fcmToken"],
+      deviceInfo: json["deviceInfo"],
+      socketId: json["socketId"],
     );
   }
 
@@ -110,11 +118,14 @@ class User {
       "allowLastSeen": allowLastSeen,
       "suspended": suspended,
       "blockedUsers": blockedUsers,
+      "fcmToken": fcmToken,
+      "deviceInfo": deviceInfo,
+      "socketId": socketId,
     };
   }
 
   // ---------------------------------------------------------
-  // COPY-WITH (useful for UI updates)
+  // COPY WITH (for UI updates)
   // ---------------------------------------------------------
   User copyWith({
     String? id,
@@ -128,6 +139,9 @@ class User {
     bool? allowLastSeen,
     bool? suspended,
     List<String>? blockedUsers,
+    String? fcmToken,
+    String? deviceInfo,
+    String? socketId,
   }) {
     return User(
       id: id ?? this.id,
@@ -141,6 +155,10 @@ class User {
       allowLastSeen: allowLastSeen ?? this.allowLastSeen,
       suspended: suspended ?? this.suspended,
       blockedUsers: blockedUsers ?? this.blockedUsers,
+      fcmToken: fcmToken ?? this.fcmToken,
+      deviceInfo: deviceInfo ?? this.deviceInfo,
+      socketId: socketId ?? this.socketId,
     );
   }
 }
+
