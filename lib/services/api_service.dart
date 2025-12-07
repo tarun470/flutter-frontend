@@ -22,7 +22,7 @@ class UserModel {
   factory UserModel.fromLogin(Map<String, dynamic> json) {
     final u = json["user"] ?? {};
     return UserModel(
-      id: u["_id"] ?? u["id"] ?? "",
+      id: u["id"] ?? u["_id"] ?? "",
       username: u["username"] ?? "",
       nickname: u["nickname"] ?? u["username"] ?? "",
     );
@@ -30,7 +30,7 @@ class UserModel {
 
   factory UserModel.fromRegister(Map<String, dynamic> json) {
     return UserModel(
-      id: json["_id"] ?? json["id"] ?? "",
+      id: json["id"] ?? json["_id"] ?? "",
       username: json["username"] ?? "",
       nickname: json["nickname"] ?? "",
     );
@@ -86,9 +86,9 @@ class ApiService {
     };
   }
 
-  // ======================================================================
-  // LOGIN — POST /api/auth/login
-  // ======================================================================
+  // ===============================================================
+  // LOGIN — POST /auth/login
+  // ===============================================================
   static Future<Map<String, dynamic>?> loginUser(
     String username,
     String password,
@@ -128,14 +128,14 @@ class ApiService {
     }
   }
 
-  // ======================================================================
-  // REGISTER — POST /api/auth/register
-  // ======================================================================
+  // ===============================================================
+  // REGISTER — POST /auth/register
+  // ===============================================================
   static Future<Map<String, dynamic>?> register(
     String username,
-    String password,
-    String nickname,
-  ) async {
+    String password, {
+    required String nickname,
+  }) async {
     final url = Uri.parse("${Constants.apiUrl}/auth/register");
 
     try {
@@ -152,7 +152,6 @@ class ApiService {
       if (res.statusCode != 201) return null;
 
       final body = jsonDecode(res.body);
-
       final user = UserModel.fromRegister(body["user"]);
 
       return {
@@ -165,9 +164,10 @@ class ApiService {
     }
   }
 
-  // ======================================================================
-  // FETCH MESSAGES — GET /api/messages?room=general
-  // ======================================================================
+  // ===============================================================
+  // FETCH MESSAGES — GET /messages?room=general
+  // Backend returns: { messages: [...] }
+  // ===============================================================
   static Future<List<MessageModel>> fetchMessages(
       String roomId, String token) async {
     final url = Uri.parse("${Constants.apiUrl}/messages?room=$roomId");
@@ -175,21 +175,25 @@ class ApiService {
     try {
       final res = await http.get(url, headers: _headers(token: token));
 
-      if (res.statusCode == 200) {
-        final list = jsonDecode(res.body) as List;
-        return list.map((e) => MessageModel.fromJson(e)).toList();
-      }
+      if (res.statusCode != 200) return [];
 
-      return [];
+      final body = jsonDecode(res.body);
+
+      // Extract messages list
+      final list = body["messages"] ?? [];
+
+      return List<MessageModel>.from(
+        list.map((e) => MessageModel.fromJson(e)),
+      );
     } catch (e) {
       print("❌ FETCH MESSAGES ERROR: $e");
       return [];
     }
   }
 
-  // ======================================================================
-  // FILE UPLOAD — POST /api/upload
-  // ======================================================================
+  // ===============================================================
+  // FILE UPLOAD — POST /upload
+  // ===============================================================
   static Future<MessageModel?> uploadFile(
     String path,
     String fieldName, {
@@ -206,7 +210,7 @@ class ApiService {
       await http.MultipartFile.fromPath(
         fieldName,
         path,
-        filename: filename,
+        filename: filename ?? path.split("/").last,
       ),
     );
 
@@ -214,30 +218,28 @@ class ApiService {
       final streamed = await req.send();
       final res = await http.Response.fromStream(streamed);
 
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        final json = jsonDecode(res.body);
+      if (res.statusCode != 200 && res.statusCode != 201) return null;
 
-        return MessageModel(
-          id: json["_id"] ?? "",
-          content: "",
-          type: "file",
-          fileUrl: json["url"],
-          fileName: json["fileName"],
-          roomId: "general",
-          edited: false,
-        );
-      }
+      final json = jsonDecode(res.body);
 
-      return null;
+      return MessageModel(
+        id: json["_id"] ?? "",
+        content: "",
+        type: "file",
+        fileUrl: json["url"] ?? json["fileUrl"],
+        fileName: json["fileName"],
+        roomId: "general",
+        edited: false,
+      );
     } catch (e) {
       print("❌ FILE UPLOAD ERROR: $e");
       return null;
     }
   }
 
-  // ======================================================================
+  // ===============================================================
   // TOKEN HELPERS
-  // ======================================================================
+  // ===============================================================
   static Future<String?> getToken() => _storage.getToken();
   static Future<String?> getUserId() => _storage.getUserId();
   static Future<void> logout() => _storage.clearAll();
