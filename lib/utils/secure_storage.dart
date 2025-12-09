@@ -1,70 +1,99 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:html' as html; // Only used on web
 
-/// Secure Storage wrapper with:
-/// ✔ Mobile secure storage
-/// ✔ Web-friendly in-memory fallback
-/// ✔ Fast RAM cache for all platforms
 class SecureStorageService {
   static final SecureStorageService _instance = SecureStorageService._internal();
   factory SecureStorageService() => _instance;
   SecureStorageService._internal();
 
-  /// Secure Storage for Mobile (disabled for Web)
+  // -----------------------------------------------------------
+  // Secure Storage for Mobile
+  // -----------------------------------------------------------
   final FlutterSecureStorage? _storage =
       kIsWeb ? null : const FlutterSecureStorage();
 
+  // -----------------------------------------------------------
   // Keys
+  // -----------------------------------------------------------
   static const String _jwtKey = "JWT_TOKEN";
   static const String _userIdKey = "USER_ID";
   static const String _usernameKey = "USERNAME";
 
-  /// Fast in-memory cache (RAM)
+  // -----------------------------------------------------------
+  // RAM cache (Fast!)
+  // -----------------------------------------------------------
   final Map<String, String?> _cache = {};
 
-  // ------------------------------------------------------------
-  // SAVE
-  // ------------------------------------------------------------
+  // Enable LocalStorage for Web
+  final bool enableWebLocalStorage = true;
+
+  // -----------------------------------------------------------
+  // SAVE VALUES
+  // -----------------------------------------------------------
   Future<void> saveToken(String token) => _write(_jwtKey, token);
   Future<void> saveUserId(String id) => _write(_userIdKey, id);
   Future<void> saveUsername(String name) => _write(_usernameKey, name);
 
-  // ------------------------------------------------------------
-  // READ
-  // ------------------------------------------------------------
+  // -----------------------------------------------------------
+  // READ VALUES
+  // -----------------------------------------------------------
   Future<String?> getToken() => _read(_jwtKey);
   Future<String?> getUserId() => _read(_userIdKey);
   Future<String?> getUsername() => _read(_usernameKey);
 
-  // ------------------------------------------------------------
-  // DELETE / CLEAR
-  // ------------------------------------------------------------
+  // -----------------------------------------------------------
+  // DELETE VALUES
+  // -----------------------------------------------------------
   Future<void> deleteToken() => _delete(_jwtKey);
   Future<void> deleteUserId() => _delete(_userIdKey);
+  Future<void> deleteUsername() => _delete(_usernameKey);
 
+  // -----------------------------------------------------------
+  // LOGOUT (Clear all)
+  // -----------------------------------------------------------
+  Future<void> logout() async {
+    await deleteToken();
+    await deleteUserId();
+    await deleteUsername();
+  }
+
+  // OPTIONAL: Full wipe method
   Future<void> clearAll() async {
     _cache.clear();
 
-    // No secure storage on web
-    if (kIsWeb || _storage == null) return;
+    if (kIsWeb && enableWebLocalStorage) {
+      html.window.localStorage.remove(_jwtKey);
+      html.window.localStorage.remove(_userIdKey);
+      html.window.localStorage.remove(_usernameKey);
+      return;
+    }
 
-    try {
+    if (_storage != null) {
       await _storage!.deleteAll();
-    } catch (e) {
-      debugPrint("⚠️ clearAll() error: $e");
     }
   }
 
-  // ------------------------------------------------------------
-  // INTERNAL STORAGE LOGIC
-  // ------------------------------------------------------------
+  // -----------------------------------------------------------
+  // CHECK LOGIN STATUS
+  // -----------------------------------------------------------
+  Future<bool> isLoggedIn() async {
+    final t = await getToken();
+    return t != null && t.isNotEmpty;
+  }
 
+  // -----------------------------------------------------------
+  // INTERNAL WRITE
+  // -----------------------------------------------------------
   Future<void> _write(String key, String value) async {
-    // Always update RAM cache
     _cache[key] = value;
 
-    // Save to secure storage only on mobile
-    if (!kIsWeb && _storage != null) {
+    if (kIsWeb && enableWebLocalStorage) {
+      html.window.localStorage[key] = value;
+      return;
+    }
+
+    if (_storage != null) {
       try {
         await _storage!.write(key: key, value: value);
       } catch (e) {
@@ -73,28 +102,43 @@ class SecureStorageService {
     }
   }
 
+  // -----------------------------------------------------------
+  // INTERNAL READ
+  // -----------------------------------------------------------
   Future<String?> _read(String key) async {
-    // 1) RAM cache (fastest)
     if (_cache.containsKey(key)) return _cache[key];
 
-    // 2) On web → return null (persistent storage not allowed)
-    if (kIsWeb || _storage == null) return null;
-
-    // 3) Mobile secure storage
-    try {
-      final value = await _storage!.read(key: key);
-      _cache[key] = value; // cache it
-      return value;
-    } catch (e) {
-      debugPrint("⚠️ Error reading [$key]: $e");
-      return null;
+    if (kIsWeb && enableWebLocalStorage) {
+      final v = html.window.localStorage[key];
+      _cache[key] = v;
+      return v;
     }
+
+    if (_storage != null) {
+      try {
+        final v = await _storage!.read(key: key);
+        _cache[key] = v;
+        return v;
+      } catch (e) {
+        debugPrint("⚠️ Error reading [$key]: $e");
+      }
+    }
+
+    return null;
   }
 
+  // -----------------------------------------------------------
+  // INTERNAL DELETE
+  // -----------------------------------------------------------
   Future<void> _delete(String key) async {
     _cache.remove(key);
 
-    if (!kIsWeb && _storage != null) {
+    if (kIsWeb && enableWebLocalStorage) {
+      html.window.localStorage.remove(key);
+      return;
+    }
+
+    if (_storage != null) {
       try {
         await _storage!.delete(key: key);
       } catch (e) {

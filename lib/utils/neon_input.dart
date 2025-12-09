@@ -24,7 +24,7 @@ InputDecoration neonInputDecoration(
       color: Colors.white70,
       fontSize: 14,
       shadows: kIsWeb
-          ? [] // Web looks cleaner without shadow blur
+          ? [] // No shadow blur on web (keeps clean UI)
           : [
               Shadow(
                 color: Colors.black.withOpacity(0.6),
@@ -41,7 +41,7 @@ InputDecoration neonInputDecoration(
       ],
     ),
 
-    // Neon borders with glow
+    // Neon borders
     enabledBorder: _border(Constants.primary, 2),
     focusedBorder: _border(Constants.accent, 3),
     errorBorder: _border(Colors.redAccent, 2),

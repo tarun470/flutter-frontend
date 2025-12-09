@@ -55,7 +55,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   // --------------------------------------------------------
-  // LOGIN LOGIC
+  // LOGIN LOGIC — CLEAN, FIXED & BACKEND-COMPATIBLE
   // --------------------------------------------------------
   Future<void> login() async {
     final username = usernameCtrl.text.trim().toLowerCase();
@@ -75,23 +75,27 @@ class _LoginScreenState extends State<LoginScreen>
 
       setState(() => loading = false);
 
+      // Invalid or unauthorized
       if (res == null) {
         _showError("Invalid username or password");
         return;
       }
 
       final token = res["token"];
-      final user = res["user"]; // User model from backend
+      final user = res["user"];
 
       if (token == null || user == null) {
-        _showError("Unexpected server error");
+        _showError("Unexpected server response. Try again.");
         return;
       }
 
+      // Save session
       await storage.saveToken(token);
       await storage.saveUserId(user.id);
-      await storage.saveUsername(user.nickname ?? user.username);
+      await storage.saveUsername(user.nickname);
 
+      // Navigate
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const ChatScreen()),
@@ -99,19 +103,24 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() => loading = false);
-      _showError("Something went wrong. Please try again.");
+      _showError("Could not reach server. Please try again.");
+      print("LOGIN ERROR: $e");
     }
   }
 
   // --------------------------------------------------------
-  // ERROR SNACKBAR
+  // ERROR SNACKBAR (Improved)
   // --------------------------------------------------------
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg),
-        backgroundColor: Colors.redAccent.shade200,
+        content: Text(
+          msg,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+        ),
+        backgroundColor: Colors.redAccent,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
@@ -145,7 +154,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   // --------------------------------------------------------
-  // CUSTOM THEME BACKGROUND (CUSTOM OPTION #5)
+  // CUSTOM BACKGROUND
   // --------------------------------------------------------
   Widget _buildBackground() {
     return Stack(
@@ -163,7 +172,6 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
         ),
-        // Soft radial highlights
         Positioned(
           top: -80,
           right: -40,
@@ -336,7 +344,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   // --------------------------------------------------------
-  // PASSWORD INPUT WITH TOGGLE
+  // PASSWORD INPUT
   // --------------------------------------------------------
   Widget _buildPasswordInput() {
     return TextField(
@@ -465,5 +473,3 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 }
-
-

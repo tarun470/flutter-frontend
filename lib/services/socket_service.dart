@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:html' as html; // Only affects Web builds
+import 'dart:html' as html; // NOTE: Web builds only
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 import '../models/message.dart';
@@ -51,12 +51,12 @@ class SocketService {
 
     _socket!
       ..onConnect((_) {
-        print("🟢 Connected → ID: ${_socket!.id}");
+        print("🟢 Socket connected → ID: ${_socket!.id}");
         _initializeListeners();
         onConnect?.call();
       })
       ..onDisconnect((_) {
-        print("🔴 Disconnected");
+        print("🔴 Socket disconnected");
         onDisconnect?.call();
       })
       ..onConnectError((e) => print("❌ Connect error: $e"))
@@ -65,7 +65,6 @@ class SocketService {
 
   // ---------------- INTERNAL LISTENERS ----------------
   void _initializeListeners() {
-    // MESSAGE RECEIVE
     _listen("receiveMessage", (m) {
       try {
         onMessage?.call(Message.fromJson(m));
@@ -74,7 +73,6 @@ class SocketService {
       }
     });
 
-    // TYPING
     _listen("typing", (m) {
       onTyping?.call(
         m["userId"]?.toString() ?? "",
@@ -83,7 +81,6 @@ class SocketService {
       );
     });
 
-    // ONLINE USERS
     _listen("onlineUsers", (m) {
       onOnlineUsers?.call(
         int.tryParse(m["count"].toString()) ?? 0,
@@ -91,17 +88,14 @@ class SocketService {
       );
     });
 
-    // MESSAGE EDIT
     _listen("messageEdited", (m) {
       onMessageEdited?.call(Message.fromJson(m));
     });
 
-    // MESSAGE DELETE
     _listen("messageDeleted", (m) {
       onMessageDeleted?.call(Message.fromJson(m));
     });
 
-    // -------- DELIVERY --------
     _listen("messageDelivered", (m) {
       final updated = Message(
         id: m["messageId"],
@@ -114,13 +108,12 @@ class SocketService {
         isDelivered: true,
         isSeen: false,
         deliveredTo: List<String>.from(m["deliveredTo"] ?? []),
-        seenBy: List<String>.from(m["seenBy"] ?? []), // FIXED
+        seenBy: List<String>.from(m["seenBy"] ?? []),
         reactions: {},
       );
       onMessageDelivered?.call(updated);
     });
 
-    // -------- SEEN --------
     _listen("messageSeen", (m) {
       final updated = Message(
         id: m["messageId"],
@@ -132,20 +125,18 @@ class SocketService {
         timestamp: DateTime.now(),
         isDelivered: true,
         isSeen: true,
-        deliveredTo: List<String>.from(m["deliveredTo"] ?? []), // FIXED
+        deliveredTo: List<String>.from(m["deliveredTo"] ?? []),
         seenBy: List<String>.from(m["seenBy"] ?? []),
         reactions: {},
       );
       onMessageSeen?.call(updated);
     });
 
-    // EXTRA EVENTS
     _listen("reactionUpdated", (m) => onReactionUpdated?.call(m));
     _listen("roomsList", (m) => onRoomList?.call(m));
     _listen("lastSeen", (m) => onLastSeenUpdated?.call(m));
   }
 
-  // Helper to safely parse payloads
   void _listen(String event, Function(Map<String, dynamic>) handler) {
     _socket!..off(event);
     _socket!.on(event, (d) => _safeDecode(d, handler));
@@ -206,7 +197,7 @@ class SocketService {
     });
   }
 
-  // ---------------- SEND IMAGE (Web) ----------------
+  // ---------------- SEND IMAGE (WEB ONLY) ----------------
   void sendImageWeb(html.File file,
       {required String roomId, required String senderName}) {
     final reader = html.FileReader();
@@ -223,7 +214,7 @@ class SocketService {
     });
   }
 
-  // ---------------- EDIT / DELETE / REACTION ----------------
+  // ---------------- EDIT / DELETE / REACTIONS ----------------
   void editMessage(String id, String newText) {
     if (!isConnected) return;
     _socket!.emit("editMessage", {"messageId": id, "content": newText});
@@ -245,7 +236,7 @@ class SocketService {
     });
   }
 
-  // ---------------- ROOMS & TYPING ----------------
+  // ---------------- TYPING & ROOMS ----------------
   void sendTyping(String roomId, String uid, String uname, bool typing) {
     if (!isConnected) return;
     _socket!.emit("typing", {
@@ -271,7 +262,7 @@ class SocketService {
     _socket!.emit("getRooms");
   }
 
-  // ---------------- DISCONNECT CLEANLY ----------------
+  // ---------------- DISCONNECT ----------------
   void disconnect() {
     if (_socket == null) return;
 

@@ -47,7 +47,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   }
 
   // =====================================================
-  // REGISTER LOGIC — 100% FIXED
+  // REGISTER LOGIC — CLEAN, FIXED, BACKEND-COMPATIBLE
   // =====================================================
   Future<void> register() async {
     final username = usernameCtrl.text.trim().toLowerCase();
@@ -59,6 +59,11 @@ class _RegisterScreenState extends State<RegisterScreen>
       return;
     }
 
+    if (username.contains(" ")) {
+      _error("Username cannot contain spaces.");
+      return;
+    }
+
     if (pass.length < 6) {
       _error("Password must be at least 6 characters.");
       return;
@@ -67,7 +72,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     setState(() => loading = true);
 
     try {
-      // ✅ Correct API signature
       final res = await ApiService.register(
         username,
         pass,
@@ -78,22 +82,25 @@ class _RegisterScreenState extends State<RegisterScreen>
       setState(() => loading = false);
 
       if (res == null) {
-        _error("Registration failed. Try a different username.");
+        _error("Registration failed. Username may already exist.");
         return;
       }
 
-      final user = res['user'];
-      final usernameText = user.username;
+      final user = res["user"];
+      if (user == null) {
+        _error("Unexpected server response.");
+        return;
+      }
+
+      final usernameDisplay = user.username;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text("🎉 Account created for $usernameText! Please log in."),
+          content: Text("🎉 Account created for @$usernameDisplay! Please log in."),
           backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       );
 
@@ -101,11 +108,11 @@ class _RegisterScreenState extends State<RegisterScreen>
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
-
     } catch (e) {
       if (!mounted) return;
       setState(() => loading = false);
-      _error("Registration failed. Please try again.");
+      _error("Registration failed. Please check your internet connection.");
+      print("REGISTER ERROR: $e");
     }
   }
 
@@ -116,8 +123,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         backgroundColor: Colors.redAccent,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
@@ -226,8 +232,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  Widget _input(
-      TextEditingController ctrl, String label, String autofill) {
+  Widget _input(TextEditingController ctrl, String label, String autofill) {
     return TextField(
       controller: ctrl,
       style: const TextStyle(color: Colors.white),

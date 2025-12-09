@@ -1,12 +1,12 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 
 import '../services/socket_service.dart';
-import '../services/message_service.dart';
 import '../services/api_service.dart';
+import '../services/message_service.dart';
 import '../utils/secure_storage.dart';
 import '../models/message.dart';
 import 'login_screen.dart';
@@ -19,53 +19,58 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
-  final SocketService socketService = SocketService();
-  final TextEditingController messageController = TextEditingController();
-  final SecureStorageService secureStorage = SecureStorageService();
-  final MessageService messageService = MessageService();
-  final ScrollController scrollController = ScrollController();
+  // CONTROLLERS
+  final messageCtrl = TextEditingController();
+  final scrollCtrl = ScrollController();
 
-  List<Message> messages = [];
+  // SERVICES
+  final socketService = SocketService();
+  final storage = SecureStorageService();
+  final msgService = MessageService();
+
+  // USER INFO
   String? userId;
   String? username;
   String? token;
 
+  // CHAT STATE
+  List<Message> messages = [];
   bool showEmoji = false;
   bool loadingHistory = true;
   bool sending = false;
 
   String currentRoom = "general";
+  int onlineCount = 0;
 
   String? replyToMessageId;
-  Map<String, bool> typingUsers = {};
-  int onlineCount = 0;
+  Map<String, String> typingUsers = {}; // userId → username
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _initializeUser();
+    _initUser();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    messageController.dispose();
-    scrollController.dispose();
+    messageCtrl.dispose();
+    scrollCtrl.dispose();
     socketService.disconnect();
     super.dispose();
   }
 
   // -------------------------------------------------------------
-  // INIT USER + LOAD HISTORY + CONNECT SOCKET
+  // INIT USER + HISTORY
   // -------------------------------------------------------------
-  Future<void> _initializeUser() async {
-    token = await secureStorage.getToken();
-    userId = await secureStorage.getUserId();
-    username = await secureStorage.getUsername();
+  Future<void> _initUser() async {
+    token = await storage.getToken();
+    userId = await storage.getUserId();
+    username = await storage.getUsername();
 
     if (token == null || userId == null) {
-      _redirectToLogin();
+      _goToLogin();
       return;
     }
 
@@ -76,16 +81,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _loadHistory() async {
     setState(() => loadingHistory = true);
 
-    final hist = await messageService.fetchHistory(currentRoom);
-    setState(() {
-      messages = hist;
-      loadingHistory = false;
-    });
+    messages = await msgService.fetchHistory(currentRoom);
 
-    _scrollToBottom();
+    setState(() => loadingHistory = false);
+    _scrollBottom();
   }
 
-  void _redirectToLogin() {
+  void _goToLogin() {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -102,100 +104,82 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       socketService.onMessage = (msg) {
         if (!messages.any((m) => m.id == msg.id)) {
           setState(() => messages.add(msg));
-          _scrollToBottom();
+          _scrollBottom();
         }
       };
 
-      socketService.onTyping = (uid, typing, uname) {
+      // TYPING USERS
+      socketService.onTyping = (uid, isTyping, uname) {
         if (uid == userId) return;
 
         setState(() {
-          if (typing) {
-            typingUsers[uid] = true;
+          if (isTyping) {
+            typingUsers[uid] = uname ?? "User";
           } else {
             typingUsers.remove(uid);
           }
         });
       };
 
-      socketService.onOnlineUsers = (count, map) {
+      socketService.onOnlineUsers = (count, _) {
         setState(() => onlineCount = count);
       };
 
-      socketService.onMessageEdited = (msg) {
-        final index = messages.indexWhere((m) => m.id == msg.id);
-        if (index != -1) {
-          setState(() => messages[index] = msg);
+      // ✔ Delivered
+      socketService.onMessageDelivered = (m) {
+        final i = messages.indexWhere((x) => x.id == m.id);
+        if (i != -1) {
+          setState(() {
+            messages[i].isDelivered = true;
+            messages[i].deliveredTo = m.deliveredTo;
+          });
         }
       };
 
-      socketService.onMessageDeleted = (msg) {
-        setState(() => messages.removeWhere((m) => m.id == msg.id));
-      };
-
-      socketService.onReactionUpdated = (payload) {
-        final id = payload["messageId"];
-        final index = messages.indexWhere((m) => m.id == id);
-        if (index != -1) {
-          messages[index].reactions =
-              Map<String, int>.from(payload["reactions"] ?? {});
-          setState(() {});
-        }
-      };
-
-      socketService.onMessageDelivered = (msg) {
-        final index = messages.indexWhere((m) => m.id == msg.id);
-        if (index != -1) {
-          messages[index].isDelivered = true;
-          messages[index].deliveredTo = msg.deliveredTo;
-          setState(() {});
-        }
-      };
-
-      socketService.onMessageSeen = (msg) {
-        final index = messages.indexWhere((m) => m.id == msg.id);
-        if (index != -1) {
-          messages[index].isSeen = true;
-          messages[index].seenBy = msg.seenBy;
-          setState(() {});
+      // ✔✔ Seen
+      socketService.onMessageSeen = (m) {
+        final i = messages.indexWhere((x) => x.id == m.id);
+        if (i != -1) {
+          setState(() {
+            messages[i].isSeen = true;
+            messages[i].seenBy = m.seenBy;
+          });
         }
       };
     });
   }
 
   // -------------------------------------------------------------
-  // SCROLL TO BOTTOM
+  // SCROLL
   // -------------------------------------------------------------
-  void _scrollToBottom({int delay = 80}) {
+  void _scrollBottom({int delay = 70}) {
     Future.delayed(Duration(milliseconds: delay), () {
-      if (!scrollController.hasClients) return;
-      scrollController.animateTo(
-        scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 250),
+      if (!scrollCtrl.hasClients) return;
+      scrollCtrl.animateTo(
+        scrollCtrl.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 220),
         curve: Curves.easeOut,
       );
     });
   }
 
   // -------------------------------------------------------------
-  // SEND MESSAGE
+  // SEND TEXT MESSAGE
   // -------------------------------------------------------------
   Future<void> _sendText() async {
-    final content = messageController.text.trim();
-    if (content.isEmpty) return;
-    if (sending) return;
+    final text = messageCtrl.text.trim();
+    if (text.isEmpty || sending) return;
 
     sending = true;
 
     final tempId = DateTime.now().millisecondsSinceEpoch.toString();
 
-    // ---- TEMP MESSAGE FOR UI ----
-    final temp = Message(
+    final msg = Message(
       id: tempId,
       senderId: userId!,
       senderName: username!,
       roomId: currentRoom,
-      content: content,
+      content: text,
       type: "text",
       timestamp: DateTime.now(),
       reactions: {},
@@ -205,34 +189,83 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
 
     setState(() {
-      messages.add(temp);
-      messageController.clear();
+      messages.add(msg);
+      messageCtrl.clear();
       replyToMessageId = null;
       showEmoji = false;
     });
 
-    _scrollToBottom();
-
-    // ---- SEND TO SERVER ----
     socketService.sendMessage(
-      content,
+      text,
       roomId: currentRoom,
       senderName: username!,
       tempId: tempId,
-      replyTo: temp.replyToMessageId,
+      replyTo: replyToMessageId,
     );
 
+    socketService.sendTyping(currentRoom, userId!, username!, false);
+
     sending = false;
+    _scrollBottom();
   }
 
   // -------------------------------------------------------------
-  // FILE UPLOAD
+  // SEND IMAGE
   // -------------------------------------------------------------
-  Future<void> _pickFile() async {
+  Future<void> _sendImage() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery);
+
+      if (picked == null) return;
+
+      final uploaded = await ApiService.uploadFile(
+        picked.path,
+        "image",
+        token: token,
+        filename: picked.name,
+      );
+
+      if (uploaded == null) return;
+
+      final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+
+      final msg = Message(
+        id: tempId,
+        senderId: userId!,
+        senderName: username!,
+        roomId: currentRoom,
+        content: uploaded.fileUrl!,
+        type: "image",
+        timestamp: DateTime.now(),
+        reactions: {},
+        deliveredTo: [],
+        seenBy: [],
+        fileUrl: uploaded.fileUrl,
+        fileName: uploaded.fileName,
+      );
+
+      setState(() => messages.add(msg));
+      _scrollBottom();
+
+      socketService.sendFile(
+        uploaded.fileUrl!,
+        uploaded.fileName!,
+        roomId: currentRoom,
+        senderName: username!,
+      );
+    } catch (e) {
+      print("Image send error: $e");
+    }
+  }
+
+  // -------------------------------------------------------------
+  // SEND FILE
+  // -------------------------------------------------------------
+  Future<void> _sendFile() async {
     try {
       final res = await FilePicker.platform.pickFiles();
-
-      if (res == null || res.files.isEmpty) return;
+      if (res == null) return;
 
       final path = res.files.single.path!;
       final name = res.files.single.name;
@@ -244,12 +277,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         filename: name,
       );
 
-      if (uploaded == null || uploaded.fileUrl == null) return;
+      if (uploaded == null) return;
 
       final tempId = DateTime.now().millisecondsSinceEpoch.toString();
 
-      // Local preview message
-      final temp = Message(
+      final msg = Message(
         id: tempId,
         senderId: userId!,
         senderName: username!,
@@ -261,238 +293,176 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         deliveredTo: [],
         seenBy: [],
         fileUrl: uploaded.fileUrl,
-        fileName: uploaded.fileName ?? name,
+        fileName: uploaded.fileName,
       );
 
-      setState(() => messages.add(temp));
-      _scrollToBottom();
+      setState(() => messages.add(msg));
+      _scrollBottom();
 
-      // Send to server
       socketService.sendFile(
         uploaded.fileUrl!,
-        uploaded.fileName ?? name,
+        uploaded.fileName!,
         roomId: currentRoom,
         senderName: username!,
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Upload failed: $e")),
-      );
+      print("Upload error: $e");
     }
   }
 
   // -------------------------------------------------------------
-  // FIND MESSAGE BY ID (for reply preview)
+  // WHATSAPP ✔✔ Ticks UI
   // -------------------------------------------------------------
-  Message? _findMessage(String id) {
-    try {
-      return messages.firstWhere((m) => m.id == id);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  // -------------------------------------------------------------
-  // STATUS ICONS
-  // -------------------------------------------------------------
-  Widget _statusIcon(Message m) {
+  Widget _tick(Message m) {
     if (m.senderId != userId) return const SizedBox();
 
     if (!m.isDelivered) {
-      return const Icon(Icons.watch_later_outlined,
-          size: 14, color: Colors.white38);
+      return const Icon(Icons.check, size: 16, color: Colors.white38);
     }
 
     if (!m.isSeen) {
-      return const Icon(Icons.done, size: 14, color: Colors.white70);
+      return const Icon(Icons.done_all, size: 16, color: Colors.white70);
     }
 
-    return const Icon(Icons.done_all, size: 14, color: Colors.lightBlueAccent);
+    return const Icon(Icons.done_all, size: 16, color: Colors.lightBlueAccent);
   }
 
   // -------------------------------------------------------------
-  // MESSAGE BUBBLE UI
+  // TYPING
   // -------------------------------------------------------------
-  Widget _messageTile(Message m) {
-    final isMe = (m.senderId == userId);
-    final timeStr = DateFormat('hh:mm a').format(m.timestamp);
+  Widget _typingIndicator() {
+    if (typingUsers.isEmpty) return const SizedBox();
 
-    final reply = m.replyToMessageId != null
-        ? _findMessage(m.replyToMessageId!)
-        : null;
+    final names = typingUsers.values.join(", ");
 
-    final bubbleColor = isMe
-        ? const LinearGradient(
-            colors: [Color(0xFF0fd9ff), Color(0xFF0061ff)])
-        : const LinearGradient(
-            colors: [Color(0xFF222831), Color(0xFF1B2A3A)]);
-
-    return GestureDetector(
-      onLongPress: () => _onLongPress(m),
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, bottom: 4),
       child: Align(
-        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          child: ConstrainedBox(
-            constraints:
-                BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: bubbleColor,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.4),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3))
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment:
-                      isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                  children: [
-                    if (!isMe)
-                      Text(
-                        m.senderName,
-                        style:
-                            const TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-
-                    if (reply != null)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 6, top: 4),
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.black26,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          "${reply.senderName}: ${reply.content}",
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 12),
-                        ),
-                      ),
-
-                    if (m.type == "image")
-                      Image.network(m.content, width: 200, height: 140)
-                    else if (m.type == "file")
-                      Row(
-                        children: [
-                          const Icon(Icons.insert_drive_file,
-                              color: Colors.white70),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(m.fileName ?? "file",
-                                overflow: TextOverflow.ellipsis,
-                                style:
-                                    const TextStyle(color: Colors.white70)),
-                          ),
-                        ],
-                      )
-                    else
-                      Text(
-                        m.content,
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 15),
-                      ),
-
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(timeStr,
-                            style: const TextStyle(
-                                color: Colors.white60, fontSize: 10)),
-                        const SizedBox(width: 6),
-                        _statusIcon(m),
-                      ],
-                    )
-                  ],
-                ),
-              ),
-            ),
-          ),
+        alignment: Alignment.centerLeft,
+        child: Text(
+          "$names is typing...",
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
         ),
       ),
     );
   }
 
   // -------------------------------------------------------------
-  // LONG PRESS MENU
+  // MESSAGE BUBBLE (Now includes image + ticks!)
   // -------------------------------------------------------------
-  void _onLongPress(Message m) async {
+  Widget _bubble(Message m) {
     final isMe = m.senderId == userId;
+    final time = DateFormat('hh:mm a').format(m.timestamp);
 
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.black87,
-      builder: (c) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-              leading: const Icon(Icons.reply, color: Colors.white),
-              title: const Text("Reply",
-                  style: TextStyle(color: Colors.white)),
-              onTap: () => Navigator.pop(c, "reply")),
-          if (isMe)
-            ListTile(
-                leading: const Icon(Icons.edit, color: Colors.white),
-                title: const Text("Edit",
-                    style: TextStyle(color: Colors.white)),
-                onTap: () => Navigator.pop(c, "edit")),
-          if (isMe)
-            ListTile(
-              leading: const Icon(Icons.delete, color: Colors.white),
-              title: const Text("Delete",
-                  style: TextStyle(color: Colors.white)),
-              onTap: () => Navigator.pop(c, "del"),
-            ),
-          ListTile(
-            leading:
-                const Icon(Icons.emoji_emotions, color: Colors.white),
-            title:
-                const Text("React", style: TextStyle(color: Colors.white)),
-            onTap: () => Navigator.pop(c, "react"),
-          )
-        ],
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          gradient: isMe
+              ? const LinearGradient(colors: [Color(0xFF0FD9FF), Color(0xFF0061FF)])
+              : const LinearGradient(colors: [Color(0xFF232931), Color(0xFF1C2835)]),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            if (m.type == "image")
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  m.fileUrl ?? m.content,
+                  width: 200,
+                  height: 200,
+                  fit: BoxFit.cover,
+                ),
+              )
+            else if (m.type == "file")
+              Row(
+                children: [
+                  const Icon(Icons.insert_drive_file, color: Colors.white70),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      m.fileName ?? "file",
+                      style: const TextStyle(color: Colors.white),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  )
+                ],
+              )
+            else
+              Text(m.content,
+                  style: const TextStyle(color: Colors.white, fontSize: 16)),
+
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(time,
+                    style:
+                        const TextStyle(color: Colors.white60, fontSize: 10)),
+                const SizedBox(width: 6),
+                _tick(m),
+              ],
+            )
+          ],
+        ),
       ),
     );
-
-    if (choice == "reply") {
-      setState(() => replyToMessageId = m.id);
-    }
   }
 
   // -------------------------------------------------------------
   // INPUT BAR
   // -------------------------------------------------------------
-  Widget _inputArea() {
+  Widget _inputBar() {
     return Container(
       padding: const EdgeInsets.all(8),
+      color: Colors.black,
       child: Row(
         children: [
+          // Emoji toggle
           IconButton(
             icon: Icon(showEmoji ? Icons.keyboard : Icons.emoji_emotions),
             color: Colors.white70,
             onPressed: () => setState(() => showEmoji = !showEmoji),
           ),
+
+          // Input field
           Expanded(
             child: TextField(
-              controller: messageController,
-              style: const TextStyle(color: Colors.white),
+              controller: messageCtrl,
               minLines: 1,
               maxLines: 4,
-              onChanged: (_) {},
+              style: const TextStyle(color: Colors.white),
+
+              onChanged: (txt) {
+                socketService.sendTyping(
+                    currentRoom, userId!, username!, txt.isNotEmpty);
+              },
+
               decoration: const InputDecoration(
-                hintText: "Type a message…",
-                hintStyle: TextStyle(color: Colors.white38),
+                hintText: "Type a message...",
+                hintStyle: TextStyle(color: Colors.white54),
                 border: InputBorder.none,
               ),
             ),
           ),
+
+          // Attach File
+          IconButton(
+            icon: const Icon(Icons.attach_file, color: Colors.white70),
+            onPressed: _sendFile,
+          ),
+
+          // Image upload button
+          IconButton(
+            icon: const Icon(Icons.image, color: Colors.greenAccent),
+            onPressed: _sendImage,
+          ),
+
+          // Send button
           IconButton(
             icon: const Icon(Icons.send, color: Colors.cyanAccent),
             onPressed: _sendText,
@@ -503,15 +473,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   // -------------------------------------------------------------
-  // BUILD
+  // BUILD UI
   // -------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text("GENERAL ($onlineCount online)"),
         backgroundColor: Colors.black,
+        title: Text(
+          "GENERAL ($onlineCount online)",
+          style: const TextStyle(color: Colors.white),
+        ),
       ),
       body: Column(
         children: [
@@ -519,26 +492,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             child: loadingHistory
                 ? const Center(child: CircularProgressIndicator())
                 : ListView.builder(
-                    controller: scrollController,
+                    controller: scrollCtrl,
                     padding: const EdgeInsets.only(bottom: 80),
                     itemCount: messages.length,
-                    itemBuilder: (_, i) => _messageTile(messages[i]),
+                    itemBuilder: (_, i) => _bubble(messages[i]),
                   ),
           ),
+
+          _typingIndicator(),
+
           if (showEmoji)
             SizedBox(
-              height: 250,
+              height: 260,
               child: EmojiPicker(
                 onEmojiSelected: (_, emoji) {
-                  messageController.text += emoji.emoji;
+                  messageCtrl.text += emoji.emoji;
                 },
                 config: const Config(columns: 8),
               ),
             ),
-          _inputArea(),
+
+          _inputBar(),
         ],
       ),
     );
   }
 }
-
