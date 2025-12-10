@@ -6,7 +6,7 @@ class Message {
 
   final String roomId;
   final String content;
-  final String type; // text | image | file | system
+  final String type;
 
   final DateTime timestamp;
 
@@ -46,9 +46,9 @@ class Message {
     this.isEdited = false,
   });
 
-  // ------------------------------------------------
-  // HELPERS
-  // ------------------------------------------------
+  // --------------------------
+  // HELPER: PARSE OBJECTID
+  // --------------------------
   static String _parseId(dynamic value) {
     if (value == null) return "";
     if (value is String) return value;
@@ -56,49 +56,57 @@ class Message {
     if (value is Map && value.containsKey("\$oid")) {
       return value["\$oid"];
     }
-
     return value.toString();
   }
 
+  // --------------------------
+  // HELPER: PARSE DATE
+  // --------------------------
   static DateTime _parseDate(dynamic value) {
     try {
       if (value is String) return DateTime.parse(value);
 
       if (value is Map && value["\$date"] != null) {
         final d = value["\$date"];
+
         if (d is String) return DateTime.parse(d);
 
         if (d is Map && d["\$numberLong"] != null) {
           return DateTime.fromMillisecondsSinceEpoch(
-            int.parse(d["\$numberLong"]),
-          );
+              int.parse(d["\$numberLong"]));
         }
       }
     } catch (_) {}
-
     return DateTime.now();
   }
 
-  // ------------------------------------------------
-  // FROM JSON
-  // ------------------------------------------------
+  // --------------------------
+  // FROM JSON (REST + SOCKET)
+  // --------------------------
   factory Message.fromJson(Map<String, dynamic> json) {
-    final senderMap = json["sender"] is Map ? json["sender"] as Map : null;
+    final sender = json["sender"] is Map ? json["sender"] : null;
 
     return Message(
       id: _parseId(json["_id"]),
-      senderId: senderMap != null ? _parseId(senderMap["_id"]) : "",
-      senderName: senderMap?["nickname"] ?? senderMap?["username"] ?? "",
-      senderAvatar: senderMap?["avatar"],
+
+      senderId: json["senderId"] ??
+          (sender != null ? _parseId(sender["_id"]) : ""),
+
+      senderName:
+          json["senderName"] ?? sender?["nickname"] ?? sender?["username"] ?? "",
+
+      senderAvatar: json["senderAvatar"] ?? sender?["avatar"],
 
       roomId: json["roomId"] ?? "global",
       content: json["content"] ?? "",
       type: json["type"] ?? "text",
 
-      timestamp: _parseDate(json["createdAt"]),
+      timestamp: _parseDate(
+        json["createdAt"] ?? json["timestamp"],
+      ),
 
       fileUrl: json["fileUrl"],
-      fileName: json["fileName"],
+      fileName: json["fileName"] ?? json["fileName"],
 
       replyToMessageId: json["replyTo"] != null
           ? _parseId(json["replyTo"])
@@ -124,33 +132,28 @@ class Message {
     );
   }
 
-  // ------------------------------------------------
+  // --------------------------
   // TO JSON
-  // ------------------------------------------------
+  // --------------------------
   Map<String, dynamic> toJson() {
     return {
       "_id": id,
       "senderId": senderId,
       "senderName": senderName,
       "senderAvatar": senderAvatar,
-
       "roomId": roomId,
       "content": content,
       "type": type,
-      "timestamp": timestamp.toIso8601String(),
-
+      "createdAt": timestamp.toIso8601String(),
       "fileUrl": fileUrl,
       "fileName": fileName,
-
       "isDelivered": isDelivered,
       "isSeen": isSeen,
       "isEdited": isEdited,
-
       "replyTo": replyToMessageId,
       "reactions": reactions,
       "deliveredTo": deliveredTo,
       "seenBy": seenBy,
-
       "deletedForEveryone": deletedForEveryone,
     };
   }
