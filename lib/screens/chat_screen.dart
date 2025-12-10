@@ -20,21 +20,17 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
-  // CONTROLLERS
   final TextEditingController messageCtrl = TextEditingController();
   final ScrollController scrollCtrl = ScrollController();
 
-  // SERVICES
   final SocketService socketService = SocketService();
   final SecureStorageService storage = SecureStorageService();
   final MessageService msgService = MessageService();
 
-  // USER INFO
-  String? userId;
-  String? username;
+  String? userId;     // stored but not used for alignment
+  String? username;   // USED for message ownership
   String? token;
 
-  // CHAT STATE
   List<Message> messages = [];
   bool showEmoji = false;
   bool loadingHistory = true;
@@ -44,14 +40,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   String? replyToMessageId;
 
-  /// userId -> username (for typing text)
-  Map<String, String> typingUsers = {};
-
-  /// userId -> full user map from socket (online list)
+  Map<String, String> typingUsers = {}; // nickname-based
   Map<String, dynamic> onlineUsersMap = {};
-
-  /// userId -> lastSeen DateTime
-  Map<String, DateTime> lastSeenMap = {};
+  Map<String, DateTime> lastSeenMap = {}; // nickname-based
 
   @override
   void initState() {
@@ -75,9 +66,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _initUser() async {
     token = await storage.getToken();
     userId = await storage.getUserId();
-    username = await storage.getUsername();
+    username = await storage.getUsername(); // nickname used as identity
 
-    if (token == null || userId == null) {
+    if (token == null || username == null) {
       _goToLogin();
       return;
     }
@@ -112,28 +103,27 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       onConnect: () {
         socketService.joinRoom(currentRoom);
 
-        // New message from server
         socketService.onMessage = (msg) {
-          // Avoid duplicates
+          // prevent duplicates
           if (!messages.any((m) => m.id == msg.id)) {
             setState(() => messages.add(msg));
             _scrollBottom();
           }
         };
 
-        // Typing users
+        // TYPING indicator (nickname-based)
         socketService.onTyping = (uid, isTyping, uname) {
-          if (uid == userId) return;
+          if (uname == username) return;
           setState(() {
             if (isTyping) {
-              typingUsers[uid] = uname ?? "User";
+              typingUsers[uname ?? "User"] = uname ?? "User";
             } else {
-              typingUsers.remove(uid);
+              typingUsers.remove(uname);
             }
           });
         };
 
-        // Online users map
+        // Online users list (contains username)
         socketService.onOnlineUsers = (count, map) {
           setState(() {
             onlineCount = count;
@@ -141,7 +131,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           });
         };
 
-        // Delivery status ✔
+        // Delivery ✔
         socketService.onMessageDelivered = (m) {
           final i = messages.indexWhere((x) => x.id == m.id);
           if (i != -1) {
@@ -152,7 +142,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           }
         };
 
-        // Seen status ✔✔
+        // Seen ✔✔
         socketService.onMessageSeen = (m) {
           final i = messages.indexWhere((x) => x.id == m.id);
           if (i != -1) {
@@ -163,26 +153,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           }
         };
 
-        // Last seen updates
+        // Last seen map now uses NICKNAME
         socketService.onLastSeenUpdated = (payload) {
           if (payload is Map<String, dynamic>) {
-            // Case 1: { userId, lastSeen }
-            if (payload["userId"] != null && payload["lastSeen"] != null) {
-              final uid = payload["userId"].toString();
-              final rawTs = payload["lastSeen"].toString();
-              try {
-                lastSeenMap[uid] = DateTime.parse(rawTs).toLocal();
-              } catch (_) {}
-            }
-            // Case 2: { users: { userId: { lastSeen: ... } } }
-            else if (payload["users"] is Map) {
+            if (payload["users"] is Map) {
               final users = Map<String, dynamic>.from(payload["users"]);
               users.forEach((uid, data) {
-                final rawTs = data["lastSeen"];
-                if (rawTs != null) {
+                final name = data["username"]?.toString();
+                final raw = data["lastSeen"]?.toString();
+                if (name != null && raw != null) {
                   try {
-                    lastSeenMap[uid] =
-                        DateTime.parse(rawTs.toString()).toLocal();
+                    lastSeenMap[name] = DateTime.parse(raw).toLocal();
                   } catch (_) {}
                 }
               });
@@ -195,53 +176,62 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   // -------------------------------------------------------------
-  // SCROLL
+  // HELPERS
   // -------------------------------------------------------------
-  void _scrollBottom({int delay = 70}) {
+  void _scrollBottom({int delay = 80}) {
     Future.delayed(Duration(milliseconds: delay), () {
       if (!scrollCtrl.hasClients) return;
       scrollCtrl.animateTo(
         scrollCtrl.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 220),
+        duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
       );
     });
   }
 
-  // -------------------------------------------------------------
-  // SEND TEXT MESSAGE (NO DUPLICATES)
-  // -------------------------------------------------------------
+  bool _isUserOnline(String? name) {
+    if (name == null || onlineUsersMap.isEmpty) return false;
+    return onlineUsersMap.values.any(
+      (u) => u["username"]?.toString() == name,
+    );
+  }
+
+  String _lastActiveText(String? name) {
+    if (name == null) return "unknown";
+
+    if (_isUserOnline(name)) return "online";
+
+    final ts = lastSeenMap[name];
+    if (ts == null) return "last active: unknown";
+
+    final diff = DateTime.now().difference(ts);
+
+    if (diff.inMinutes < 1) return "last active just now";
+    if (diff.inMinutes < 60) return "last active ${diff.inMinutes} min ago";
+    if (diff.inHours < 24) return "last active ${diff.inHours} hr ago";
+    if (diff.inDays == 1) return "last active yesterday";
+    return "last active ${diff.inDays} days ago";
+  }
+
   Future<void> _sendText() async {
     final text = messageCtrl.text.trim();
     if (text.isEmpty) return;
 
-    final tempId = DateTime.now().millisecondsSinceEpoch.toString();
-
-    // 🔥 Do NOT add to messages list here (no local duplicate)
     socketService.sendMessage(
       text,
       roomId: currentRoom,
       senderName: username!,
-      tempId: tempId,
-      replyTo: replyToMessageId,
+      tempId: DateTime.now().millisecondsSinceEpoch.toString(),
     );
 
-    // Clear input
     messageCtrl.clear();
-    replyToMessageId = null;
-    showEmoji = false;
-
-    // Stop typing event
     socketService.sendTyping(currentRoom, userId!, username!, false);
   }
 
-  // -------------------------------------------------------------
-  // SEND IMAGE  (mobile only)
-  // -------------------------------------------------------------
   Future<void> _sendImage() async {
     if (kIsWeb) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Image upload is not supported on Web yet.")),
+        const SnackBar(content: Text("Image upload not supported on Web.")),
       );
       return;
     }
@@ -249,7 +239,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: ImageSource.gallery);
-
       if (picked == null) return;
 
       final uploaded = await ApiService.uploadFile(
@@ -259,27 +248,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         filename: picked.name,
       );
 
-      if (uploaded == null || uploaded.fileUrl == null) return;
-
-      // Do NOT add temp message, let socket push real one (if backend emits)
-      socketService.sendFile(
-        uploaded.fileUrl!,
-        uploaded.fileName ?? picked.name,
-        roomId: currentRoom,
-        senderName: username!,
-      );
-    } catch (e) {
-      debugPrint("Image send error: $e");
-    }
+      if (uploaded?.fileUrl != null) {
+        socketService.sendFile(
+          uploaded!.fileUrl!,
+          uploaded.fileName ?? picked.name,
+          roomId: currentRoom,
+          senderName: username!,
+        );
+      }
+    } catch (_) {}
   }
 
-  // -------------------------------------------------------------
-  // SEND FILE (mobile only)
-  // -------------------------------------------------------------
   Future<void> _sendFile() async {
     if (kIsWeb) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("File upload is not supported on Web yet.")),
+        const SnackBar(content: Text("File upload not supported on Web.")),
       );
       return;
     }
@@ -288,76 +271,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       final res = await FilePicker.platform.pickFiles();
       if (res == null) return;
 
-      final path = res.files.single.path!;
-      final name = res.files.single.name;
-
       final uploaded = await ApiService.uploadFile(
-        path,
+        res.files.single.path!,
         "file",
         token: token,
-        filename: name,
+        filename: res.files.single.name,
       );
 
-      if (uploaded == null || uploaded.fileUrl == null) return;
-
-      socketService.sendFile(
-        uploaded.fileUrl!,
-        uploaded.fileName ?? name,
-        roomId: currentRoom,
-        senderName: username!,
-      );
-    } catch (e) {
-      debugPrint("Upload error: $e");
-    }
+      if (uploaded?.fileUrl != null) {
+        socketService.sendFile(
+          uploaded!.fileUrl!,
+          uploaded.fileName ?? res.files.single.name,
+          roomId: currentRoom,
+          senderName: username!,
+        );
+      }
+    } catch (_) {}
   }
 
   // -------------------------------------------------------------
-  // ONLINE + LAST ACTIVE HELPERS
-  // -------------------------------------------------------------
-  bool _isUserOnline(String uid) {
-    if (onlineUsersMap.isEmpty) return false;
-    return onlineUsersMap.containsKey(uid);
-  }
-
-  String _lastActiveText(String uid) {
-    if (_isUserOnline(uid)) return "online";
-
-    final ts = lastSeenMap[uid];
-    if (ts == null) return "last active: unknown";
-
-    final now = DateTime.now();
-    final diff = now.difference(ts);
-
-    if (diff.inMinutes < 1) return "last active just now";
-    if (diff.inMinutes < 60) return "last active ${diff.inMinutes} min ago";
-    if (diff.inHours < 24) return "last active ${diff.inHours} h ago";
-    if (diff.inDays == 1) return "last active yesterday";
-    return "last active ${diff.inDays} days ago";
-  }
-
-  // -------------------------------------------------------------
-  // WHATSAPP ✔✔ Ticks UI
-  // -------------------------------------------------------------
-  Widget _tick(Message m) {
-    if (m.senderId != userId) return const SizedBox();
-
-    if (!m.isDelivered) {
-      return const Icon(Icons.check, size: 16, color: Colors.white38);
-    }
-
-    if (!m.isSeen) {
-      return const Icon(Icons.done_all, size: 16, color: Colors.white70);
-    }
-
-    return const Icon(Icons.done_all, size: 16, color: Colors.lightBlueAccent);
-  }
-
-  // -------------------------------------------------------------
-  // TYPING
+  // UI WIDGETS
   // -------------------------------------------------------------
   Widget _typingIndicator() {
     if (typingUsers.isEmpty) return const SizedBox();
-
     final names = typingUsers.values.join(", ");
 
     return Padding(
@@ -372,44 +308,47 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _tick(Message m) {
+    if (m.senderName != username) return const SizedBox();
+
+    if (!m.isDelivered) {
+      return const Icon(Icons.check, size: 16, color: Colors.white38);
+    }
+    if (!m.isSeen) {
+      return const Icon(Icons.done_all, size: 16, color: Colors.white70);
+    }
+    return const Icon(Icons.done_all,
+        size: 16, color: Colors.lightBlueAccent);
+  }
+
   // -------------------------------------------------------------
-  // MESSAGE BUBBLE (Neon + Avatar + Last Active)
+  // MESSAGE BUBBLE (nickname-based)
   // -------------------------------------------------------------
   Widget _bubble(Message m) {
-    final bool isMe = m.senderId == userId;
-    final DateTime localTs = m.timestamp.toLocal();
-    final String time = DateFormat('hh:mm a').format(localTs);
+    final bool isMe = m.senderName == username;
 
-    final bool isOnline = _isUserOnline(m.senderId);
-    final String lastActive = _lastActiveText(m.senderId);
+    final DateTime ts = m.timestamp.toLocal();
+    final String time = DateFormat('hh:mm a').format(ts);
 
-    final Color meStart = const Color(0xFF38BDF8); // neon cyan
-    final Color meEnd = const Color(0xFF6366F1); // neon indigo
-    final Color otherStart = const Color(0xFF111827);
-    final Color otherEnd = const Color(0xFF020617);
-
-    final Gradient bubbleGradient = isMe
-        ? LinearGradient(
-            colors: [meStart, meEnd],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          )
-        : LinearGradient(
-            colors: [otherStart, otherEnd],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          );
-
-    final BoxShadow neonShadow = BoxShadow(
-      color: isMe
-          ? meEnd.withOpacity(0.5)
-          : Colors.blueAccent.withOpacity(0.35),
-      blurRadius: 16,
-      offset: const Offset(0, 8),
-    );
+    final bool isOnline = _isUserOnline(m.senderName);
+    final String lastActive = _lastActiveText(m.senderName);
 
     final String initials =
         m.senderName.isNotEmpty ? m.senderName[0].toUpperCase() : "?";
+
+    final Gradient bubbleGradient = isMe
+        ? const LinearGradient(
+            colors: [Color(0xFF38BDF8), Color(0xFF6366F1)])
+        : const LinearGradient(
+            colors: [Color(0xFF111827), Color(0xFF020617)],
+          );
+
+    final BoxShadow neonShadow = BoxShadow(
+      color:
+          isMe ? Colors.cyanAccent.withOpacity(0.4) : Colors.blueAccent.withOpacity(0.3),
+      blurRadius: 18,
+      offset: const Offset(0, 6),
+    );
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -417,8 +356,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.78,
-          ),
+              maxWidth: MediaQuery.of(context).size.width * 0.78),
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: bubbleGradient,
@@ -429,87 +367,73 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 bottomRight: Radius.circular(isMe ? 4 : 18),
               ),
               boxShadow: [neonShadow],
-              border: Border.all(
-                color: isMe
-                    ? Colors.white.withOpacity(0.15)
-                    : Colors.blueAccent.withOpacity(0.15),
-                width: 1,
-              ),
             ),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
               child: Column(
                 crossAxisAlignment:
                     isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
-                  // ---------- HEADER: avatar + username + status ----------
                   if (!isMe)
                     Row(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
                         CircleAvatar(
                           radius: 14,
-                          backgroundColor: Colors.black.withOpacity(0.4),
+                          backgroundColor: Colors.black54,
                           child: Text(
                             initials,
                             style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+
                           children: [
                             Row(
-                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
                                   m.senderName,
                                   style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600),
                                 ),
-                                const SizedBox(width: 4),
-                                // Online dot
+                                const SizedBox(width: 5),
                                 Container(
                                   width: 8,
                                   height: 8,
                                   decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
                                     color: isOnline
                                         ? Colors.greenAccent
                                         : Colors.grey,
+                                    shape: BoxShape.circle,
                                   ),
-                                ),
+                                )
                               ],
                             ),
                             Text(
                               lastActive,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.75),
-                                fontSize: 11,
-                              ),
+                              style: const TextStyle(
+                                  color: Colors.white70, fontSize: 11),
                             ),
                           ],
-                        ),
+                        )
                       ],
                     ),
 
                   if (!isMe) const SizedBox(height: 6),
 
-                  // ---------- CONTENT ----------
+                  // MESSAGE CONTENT
                   if (m.type == "image")
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: Image.network(
                         m.fileUrl ?? m.content,
-                        width: 220,
-                        height: 220,
+                        width: 230,
+                        height: 230,
                         fit: BoxFit.cover,
                       ),
                     )
@@ -517,48 +441,39 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     Row(
                       children: [
                         const Icon(Icons.insert_drive_file,
-                            color: Colors.white70, size: 18),
+                            color: Colors.white70),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            m.fileName ?? "file",
+                            m.fileName ?? "File",
                             style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
+                                color: Colors.white, fontSize: 14),
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
+                        )
                       ],
                     )
                   else
                     Text(
                       m.content,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        height: 1.3,
-                      ),
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 15),
                     ),
 
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
 
-                  // ---------- TIME + TICKS ----------
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         time,
                         style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 10,
-                        ),
+                            color: Colors.white70, fontSize: 10),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 5),
                       _tick(m),
                     ],
-                  ),
+                  )
                 ],
               ),
             ),
@@ -577,32 +492,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       decoration: const BoxDecoration(
         color: Color(0xFF020617),
         border: Border(
-          top: BorderSide(color: Color(0xFF1E293B), width: 0.6),
+          top: BorderSide(color: Colors.blueGrey, width: 0.4),
         ),
       ),
       child: Row(
         children: [
-          // Emoji toggle
           IconButton(
-            icon: Icon(showEmoji ? Icons.keyboard : Icons.emoji_emotions),
+            icon:
+                Icon(showEmoji ? Icons.keyboard : Icons.emoji_emotions_outlined),
             color: Colors.white70,
             onPressed: () => setState(() => showEmoji = !showEmoji),
           ),
 
-          // Input field
           Expanded(
             child: TextField(
               controller: messageCtrl,
-              minLines: 1,
-              maxLines: 4,
               style: const TextStyle(color: Colors.white),
-              onChanged: (txt) {
-                if (userId == null || username == null) return;
+              onChanged: (text) {
+                if (username == null) return;
                 socketService.sendTyping(
                   currentRoom,
                   userId!,
                   username!,
-                  txt.isNotEmpty,
+                  text.isNotEmpty,
                 );
               },
               decoration: const InputDecoration(
@@ -614,17 +526,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
 
           IconButton(
-            icon: const Icon(Icons.attach_file, color: Colors.white70),
-            onPressed: _sendFile,
-          ),
+              icon: const Icon(Icons.attach_file, color: Colors.white70),
+              onPressed: _sendFile),
           IconButton(
-            icon: const Icon(Icons.image, color: Colors.greenAccent),
-            onPressed: _sendImage,
-          ),
+              icon: const Icon(Icons.image, color: Colors.greenAccent),
+              onPressed: _sendImage),
           IconButton(
-            icon: const Icon(Icons.send, color: Colors.cyanAccent),
-            onPressed: _sendText,
-          ),
+              icon: const Icon(Icons.send, color: Colors.cyanAccent),
+              onPressed: _sendText),
         ],
       ),
     );
@@ -639,87 +548,66 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       backgroundColor: const Color(0xFF020617),
       appBar: AppBar(
         backgroundColor: const Color(0xFF020617),
-        elevation: 4,
-        shadowColor: Colors.blueAccent.withOpacity(0.4),
+        elevation: 3,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               "GENERAL",
               style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-              ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: .5),
             ),
             Text(
               "$onlineCount online",
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-              ),
-            ),
+              style: const TextStyle(color: Colors.white60, fontSize: 12),
+            )
           ],
         ),
-        // 🔥 LOGOUT BUTTON WITH CONFIRMATION
+
+        // Logout with confirmation
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.redAccent),
             onPressed: () async {
               final confirm = await showDialog<bool>(
                 context: context,
-                barrierDismissible: false,
-                builder: (context) => AlertDialog(
+                builder: (_) => AlertDialog(
                   backgroundColor: const Color(0xFF0A0F1F),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  title: const Text(
-                    "Logout?",
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  content: const Text(
-                    "Are you sure you want to logout?",
-                    style: TextStyle(color: Colors.white70),
-                  ),
+                  title: const Text("Logout?", style: TextStyle(color: Colors.white)),
+                  content: const Text("Do you really want to logout?",
+                      style: TextStyle(color: Colors.white70)),
                   actions: [
                     TextButton(
-                      child: const Text(
-                        "Cancel",
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                      onPressed: () => Navigator.pop(context, false),
-                    ),
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text("Cancel",
+                            style: TextStyle(color: Colors.white70))),
                     TextButton(
-                      child: const Text(
-                        "Logout",
-                        style: TextStyle(color: Colors.redAccent),
-                      ),
-                      onPressed: () => Navigator.pop(context, true),
-                    ),
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text("Logout",
+                            style: TextStyle(color: Colors.redAccent))),
                   ],
                 ),
               );
 
               if (confirm == true) {
                 socketService.disconnect();
-                // Make sure your SecureStorageService has this method
                 await storage.clearAll();
 
                 if (mounted) {
                   Navigator.pushAndRemoveUntil(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const LoginScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
                     (route) => false,
                   );
                 }
               }
             },
-          ),
+          )
         ],
       ),
+
       body: Column(
         children: [
           Expanded(
@@ -727,12 +615,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 ? const Center(child: CircularProgressIndicator())
                 : ListView.builder(
                     controller: scrollCtrl,
-                    padding: const EdgeInsets.only(bottom: 80, top: 8),
+                    padding:
+                        const EdgeInsets.only(bottom: 70, top: 8),
                     itemCount: messages.length,
                     itemBuilder: (_, i) => _bubble(messages[i]),
                   ),
           ),
           _typingIndicator(),
+
           if (showEmoji)
             SizedBox(
               height: 260,
@@ -743,6 +633,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 config: const Config(columns: 8),
               ),
             ),
+
           _inputBar(),
         ],
       ),
