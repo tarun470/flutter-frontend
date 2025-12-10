@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:html' as html; // NOTE: Web builds only
+import 'dart:html' as html;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 import '../models/message.dart';
@@ -16,7 +16,6 @@ class SocketService {
 
   IO.Socket? _socket;
 
-  // ---------------- CALLBACKS ----------------
   MessageCallback? onMessage;
   MessageCallback? onMessageEdited;
   MessageCallback? onMessageDeleted;
@@ -29,7 +28,9 @@ class SocketService {
   GenericCallback? onRoomList;
   GenericCallback? onLastSeenUpdated;
 
-  // ---------------- CONNECT ----------------
+  // ===============================
+  // CONNECT SOCKET
+  // ===============================
   void connect(
     String token, {
     String url = "https://chat-backend-mnz7.onrender.com",
@@ -42,9 +43,9 @@ class SocketService {
       url,
       IO.OptionBuilder()
           .setTransports(["websocket"])
-          .enableReconnection()
-          .setReconnectionAttempts(40)
           .enableForceNew()
+          .enableReconnection()
+          .setReconnectionAttempts(50)
           .setAuth({"token": token})
           .build(),
     );
@@ -63,7 +64,9 @@ class SocketService {
       ..onError((e) => print("❌ Socket error: $e"));
   }
 
-  // ---------------- INTERNAL LISTENERS ----------------
+  // ===============================
+  // INTERNAL LISTENERS
+  // ===============================
   void _initializeListeners() {
     _listen("receiveMessage", (m) {
       try {
@@ -75,7 +78,7 @@ class SocketService {
 
     _listen("typing", (m) {
       onTyping?.call(
-        m["userId"]?.toString() ?? "",
+        m["userId"] ?? "",
         m["isTyping"] == true,
         m["username"],
       );
@@ -154,7 +157,9 @@ class SocketService {
     }
   }
 
-  // ---------------- SEND TEXT MESSAGE ----------------
+  // ===============================
+  // SEND TEXT MESSAGE
+  // ===============================
   void sendMessage(
     String content, {
     required String roomId,
@@ -174,7 +179,9 @@ class SocketService {
     });
   }
 
-  // ---------------- SEND FILE MESSAGE ----------------
+  // ===============================
+  // SEND FILE
+  // ===============================
   void sendFile(
     String url,
     String name, {
@@ -197,48 +204,12 @@ class SocketService {
     });
   }
 
-  // ---------------- SEND IMAGE (WEB ONLY) ----------------
-  void sendImageWeb(html.File file,
-      {required String roomId, required String senderName}) {
-    final reader = html.FileReader();
-    reader.readAsDataUrl(file);
-
-    reader.onLoadEnd.listen((_) {
-      _socket!.emit("sendMessage", {
-        "type": "image",
-        "content": reader.result,
-        "fileName": file.name,
-        "roomId": roomId,
-        "senderName": senderName,
-      });
-    });
-  }
-
-  // ---------------- EDIT / DELETE / REACTIONS ----------------
-  void editMessage(String id, String newText) {
-    if (!isConnected) return;
-    _socket!.emit("editMessage", {"messageId": id, "content": newText});
-  }
-
-  void deleteMessage(String id, {bool forEveryone = false}) {
-    if (!isConnected) return;
-    _socket!.emit("deleteMessage", {
-      "messageId": id,
-      "forEveryone": forEveryone,
-    });
-  }
-
-  void addReaction(String id, String emoji) {
-    if (!isConnected) return;
-    _socket!.emit("addReaction", {
-      "messageId": id,
-      "emoji": emoji,
-    });
-  }
-
-  // ---------------- TYPING & ROOMS ----------------
+  // ===============================
+  // TYPING
+  // ===============================
   void sendTyping(String roomId, String uid, String uname, bool typing) {
     if (!isConnected) return;
+
     _socket!.emit("typing", {
       "roomId": roomId,
       "userId": uid,
@@ -247,41 +218,49 @@ class SocketService {
     });
   }
 
+  // ===============================
+  // JOIN ROOM
+  // ===============================
   void joinRoom(String roomId) {
     if (!isConnected) return;
     _socket!.emit("joinRoom", {"roomId": roomId});
   }
 
-  void leaveRoom(String roomId) {
-    if (!isConnected) return;
-    _socket!.emit("leaveRoom", {"roomId": roomId});
-  }
-
-  void requestRooms() {
-    if (!isConnected) return;
-    _socket!.emit("getRooms");
-  }
-
-  // ---------------- DISCONNECT ----------------
+  // ===============================
+  // DISCONNECT (WEB SAFE) ✔ FIXED
+  // ===============================
   void disconnect() {
     if (_socket == null) return;
 
-    _socket!
-      ..off("receiveMessage")
-      ..off("typing")
-      ..off("onlineUsers")
-      ..off("messageEdited")
-      ..off("messageDeleted")
-      ..off("messageDelivered")
-      ..off("messageSeen")
-      ..off("reactionUpdated")
-      ..off("roomsList")
-      ..off("lastSeen")
-      ..disconnect()
-      ..dispose();
+    print("🔌 Cleaning socket before logout...");
+
+    try {
+      // SAFELY disable reconnection without causing web build error
+      final opts = _socket!.io.options;
+      if (opts != null && opts is Map<String, dynamic>) {
+        opts["reconnection"] = false;
+      }
+    } catch (e) {
+      print("⚠️ Unable to modify reconnection flag: $e");
+    }
+
+    try {
+      _socket!.offAny();
+    } catch (e) {
+      print("⚠️ Error clearing listeners: $e");
+    }
+
+    try {
+      _socket!
+        ..disconnect()
+        ..close()
+        ..dispose();
+    } catch (e) {
+      print("⚠️ Error during disconnect: $e");
+    }
 
     _socket = null;
-    print("🔌 Socket disconnected cleanly");
+    print("🛑 Socket fully terminated.");
   }
 
   bool get isConnected => _socket?.connected ?? false;
